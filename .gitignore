@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+*.html
+!public/*.html
+node_modules/
+.vercel/
+verify_selectors.py
