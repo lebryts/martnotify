@@ -184,11 +184,9 @@ def run_cron():
     cron_secret = os.environ.get('CRON_SECRET', '')
     provided_secret = request.args.get("secret", "")
     
-    # External cron (cron-job.org) must provide the secret
     if not is_manual and cron_secret and provided_secret != cron_secret:
         return "Unauthorized", 401
-    
-    if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
+    if not is_manual and r.get("monitor_status") != "true": return "Disabled", 200
 
     query = r.get("config_search_query") or "cocopeat block"
     min_val = int(r.get("config_min_value") or 1000)
@@ -196,129 +194,55 @@ def run_cron():
     ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
 
     add_log(f"Scanning for: {query}")
-    
     r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
     
-    url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
+    # The JSON API is much harder for them to block than the HTML page
+    url = f"https://miscreact.indiamart.com/buyersearch/buyersearchlist?ss={query.replace(' ', '+')}&start=0&limit=40"
     
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Referer": "https://trade.indiamart.com/"
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://trade.indiamart.com/",
+            "Origin": "https://trade.indiamart.com"
         }
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
-        if cookie: 
-            headers["Cookie"] = cookie
+        if cookie: headers["Cookie"] = cookie
 
-        response = requests.get(url, headers=headers, timeout=10)
-        html = response.text if response.status_code == 200 else ""
+        resp = requests.get(url, headers=headers, timeout=12)
+        if resp.status_code != 200:
+            add_log(f"❌ IndiaMart API Error {resp.status_code}. Refresh Cookie.")
+            return jsonify({"status": "error"}), 200
+
+        data = resp.json()
+        leads = data.get('searchlist', []) or data.get('buyleads', [])
         
-        if len(html) < 25000 or "verify you are a human" in html:
-            if not os.environ.get('VERCEL') and not REDIS_URL:
-                add_log("Request blocked or skeleton. Switching to Selenium...")
-                html = scrape_with_selenium(url) or html
-            else:
-                add_log("❌ IndiaMart blocked the request. Please update the IndiaMart Cookie in settings.")
-                return jsonify({"status": "blocked", "message": "IndiaMart blocked the request. Update cookie."}), 200
-    except Exception as e:
-        add_log(f"Error during scan: {str(e)[:50]}")
-        return jsonify({"status": "error", "message": str(e)}), 200
+        if not leads:
+            add_log("Scan complete. No leads found in API response.")
+            return jsonify({"status": "ok", "matches": 0})
 
-    if not html: return jsonify({"status": "fail", "message": "Empty response"}), 200
-
-    found_leads = []
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # 1. Parse window.__INITIAL_STATE__
-    state_script = soup.find('script', string=re.compile(r'window\.__INITIAL_STATE__'))
-    if state_script:
-        try:
-            state_text = state_script.string.split('window.__INITIAL_STATE__=', 1)[1].strip()
-            if state_text.endswith(';'): state_text = state_text[:-1]
-            state_data = json.loads(state_text)
-            leads_data = state_data.get('searchlist', []) or state_data.get('buyleads', [])
-            if not leads_data and 'searchData' in state_data:
-                leads_data = state_data['searchData'].get('searchlist', [])
+        found = 0
+        for item in leads:
+            id = item.get('displayId') or item.get('offerId')
+            if not id or r.sismember("seen_leads", id): continue
             
-            if leads_data:
-                add_log(f"Parsing {len(leads_data)} leads from JSON state.")
-                for item in leads_data:
-                    display_id = item.get('displayId') or item.get('offerId')
-                    if not display_id or r.sismember("seen_leads", display_id): continue
-                    
-                    title = item.get('mcatName', "New Lead")
-                    qty_text = item.get('qtyText', "0")
-                    val_text = item.get('orderValueText', "0")
-                    
-                    if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
-                        found_leads.append(display_id)
-                        href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!"})
-                        r.sadd("seen_leads", display_id)
-        except: pass
-
-    # 2. HTML Parsing using .TRA_con cards (current IndiaMart layout)
-    if not found_leads:
-        cards = soup.select('.TRA_con')
-        skipped_seen = 0
-        skipped_threshold = 0
-        skipped_hidden = 0
-        total_valid = 0
-        add_log(f"Found {len(cards)} card elements in HTML.")
-        for card in cards:
-            # Skip hidden/placeholder cards
-            style = card.get('style', '')
-            if 'hidden' in style or 'height: 0' in style:
-                skipped_hidden += 1
-                continue
-
-            link = card.select_one('h3 a.TRA_link, h3 a[href*="details.mp"]')
-            if not link: continue
-            href = link.get('href', '')
-            if not href.startswith('http'):
-                href = 'https://trade.indiamart.com' + href
-            display_id = parse_qs(urlparse(href).query).get('offer', [None])[0] if 'offer=' in href else None
-            if not display_id: continue
-            total_valid += 1
-            if r.sismember("seen_leads", display_id):
-                skipped_seen += 1
-                continue
-
-            # Extract details from the structured .TRA_details section
-            qty_text = "0"
-            val_text = "0"
-            details = card.select('.TRA_details')
-            if details:
-                detail_block = details[0]
-                qty_labels = detail_block.select('span.TRA_qty')
-                values = detail_block.select('span.TRA_clg6')
-                for i, label_span in enumerate(qty_labels):
-                    label_text = label_span.get_text(strip=True).lower()
-                    value_span = values[i] if i < len(values) else None
-                    if not value_span:
-                        continue
-                    val = value_span.get_text(strip=True)
-                    if 'quantity' == label_text:
-                        qty_text = val
-                    elif 'probable order value' in label_text or 'order value' in label_text:
-                        val_text = val
-
-            if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
-                found_leads.append(display_id)
-                title = link.text.strip() or "New Lead"
-                msg = f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}"
+            qty_t = item.get('qtyText', "0")
+            val_t = item.get('orderValueText', "0")
+            
+            if parse_quantity(qty_t) >= min_qty or parse_value(val_t) >= min_val:
+                found += 1
+                title = item.get('mcatName', "New Lead")
+                href = f"https://trade.indiamart.com/details.mp?offer={id}"
+                msg = f"📦 {title}\n⚖️ {qty_t}\n💰 {val_t}\n🔗 {href}"
                 requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!"})
-                r.sadd("seen_leads", display_id)
-            else:
-                skipped_threshold += 1
+                r.sadd("seen_leads", id)
 
-        if skipped_seen or skipped_threshold:
-            add_log(f"Cards: {total_valid} valid, {skipped_seen} already seen, {skipped_threshold} below threshold.")
+        add_log(f"Scan complete. Found {found} new matching leads.")
+        return jsonify({"status": "ok", "matches": found})
 
-    r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
-    add_log(f"Scan complete. Found {len(found_leads)} matches.")
-    return jsonify({"status": "ok", "matches": len(found_leads)})
+    except Exception as e:
+        add_log(f"Scan Error: {str(e)[:50]}")
+        return jsonify({"status": "error"}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
