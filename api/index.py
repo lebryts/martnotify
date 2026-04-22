@@ -24,9 +24,9 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-# Use absolute path for static folder to avoid resolution issues in Vercel
+# Use absolute path for static folder inside the api directory for Vercel bundling
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, '../public')
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
 app = Flask(__name__, static_folder=STATIC_DIR)
 CORS(app)
