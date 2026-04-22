@@ -154,6 +154,13 @@ def toggle_monitor():
 @app.route('/api/cron', methods=['GET'])
 def run_cron():
     is_manual = request.args.get("manual") == "true"
+    cron_secret = os.environ.get('CRON_SECRET', '')
+    provided_secret = request.args.get("secret", "")
+    
+    # External cron (cron-job.org) must provide the secret
+    if not is_manual and cron_secret and provided_secret != cron_secret:
+        return "Unauthorized", 401
+    
     if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
 
     query = r.get("config_search_query") or "cocopeat block"
