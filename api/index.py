@@ -126,6 +126,15 @@ def scrape_with_selenium(url):
     finally:
         if driver: driver.quit()
 
+@app.route('/debug-files')
+def debug_files():
+    import os
+    res = []
+    for root, dirs, files in os.walk('/var/task'):
+        for file in files:
+            res.append(os.path.join(root, file))
+    return jsonify({"files": res, "cwd": os.getcwd(), "base": BASE_DIR, "static": STATIC_DIR})
+
 @app.route('/')
 def serve_index(): 
     index_path = os.path.join(app.static_folder, 'index.html')
