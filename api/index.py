@@ -96,8 +96,11 @@ def parse_value(val_str):
 
 # --- SCRAPER LOGIC ---
 def scrape_with_selenium(url):
-    if not SELENIUM_AVAILABLE: return None
-    add_log("Starting Selenium (Local Mode)...")
+    if not SELENIUM_AVAILABLE or os.environ.get('VERCEL'):
+        add_log("Selenium not available in this environment.")
+        return None
+    
+    add_log("Starting Selenium...")
     options = Options()
     options.add_argument("--headless")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
@@ -125,15 +128,6 @@ def scrape_with_selenium(url):
         return None
     finally:
         if driver: driver.quit()
-
-@app.route('/debug-files')
-def debug_files():
-    import os
-    res = []
-    for root, dirs, files in os.walk('/var/task'):
-        for file in files:
-            res.append(os.path.join(root, file))
-    return jsonify({"files": res, "cwd": os.getcwd(), "base": BASE_DIR, "static": STATIC_DIR})
 
 @app.route('/')
 def serve_index(): 
@@ -203,8 +197,9 @@ def run_cron():
 
     add_log(f"Scanning for: {query}")
     
+    r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
+    
     url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
-    html = ""
     
     try:
         headers = {
@@ -213,19 +208,26 @@ def run_cron():
             "Referer": "https://trade.indiamart.com/"
         }
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
-        if cookie: headers["Cookie"] = cookie
+        if cookie: 
+            headers["Cookie"] = cookie
+            if not cookie.startswith('ImeshVisitor'):
+                add_log("⚠️ Cookie might be invalid. Ensure it starts with ImeshVisitor.")
 
         response = requests.get(url, headers=headers, timeout=10)
         html = response.text if response.status_code == 200 else ""
         
-        if len(html) < 30000 or "verify you are a human" in html:
-            if not REDIS_URL:
+        if len(html) < 25000 or "verify you are a human" in html:
+            if not os.environ.get('VERCEL') and not REDIS_URL:
                 add_log("Request blocked or skeleton. Switching to Selenium...")
                 html = scrape_with_selenium(url) or html
+            else:
+                add_log("❌ IndiaMart blocked the request. Please update the IndiaMart Cookie in settings.")
+                return jsonify({"status": "blocked", "message": "IndiaMart blocked the request. Update cookie."}), 200
     except Exception as e:
-        if not REDIS_URL: html = scrape_with_selenium(url) or ""
+        add_log(f"Error during scan: {str(e)[:50]}")
+        return jsonify({"status": "error", "message": str(e)}), 200
 
-    if not html: return "Fail", 500
+    if not html: return jsonify({"status": "fail", "message": "Empty response"}), 200
 
     found_leads = []
     soup = BeautifulSoup(html, 'html.parser')
