@@ -196,22 +196,23 @@ def run_cron():
     add_log(f"Scanning for: {query}")
     r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
     
-    # The JSON API is much harder for them to block than the HTML page
-    url = f"https://miscreact.indiamart.com/buyersearch/buyersearchlist?ss={query.replace(' ', '+')}&start=0&limit=40"
+    # Use the main domain's tradereact API - much more stable than miscreact subdomain
+    url = f"https://trade.indiamart.com/tradereact/getproductlisting?ss={query.replace(' ', '+')}&start=0&limit=40"
     
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Referer": "https://trade.indiamart.com/",
-            "Origin": "https://trade.indiamart.com"
+            "Origin": "https://trade.indiamart.com",
+            "X-Requested-With": "XMLHttpRequest"
         }
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
         if cookie: headers["Cookie"] = cookie
 
-        resp = requests.get(url, headers=headers, timeout=12)
+        resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
-            add_log(f"❌ IndiaMart API Error {resp.status_code}. Refresh Cookie.")
+            add_log(f"❌ API Error {resp.status_code}. Try a fresh login/cookie.")
             return jsonify({"status": "error"}), 200
 
         data = resp.json()
