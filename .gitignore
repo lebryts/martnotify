@@ -3,6 +3,7 @@ __pycache__/
 .env
 *.html
 !public/*.html
+!api/static/*.html
 node_modules/
 .vercel/
 verify_selectors.py
