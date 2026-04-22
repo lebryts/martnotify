@@ -24,8 +24,17 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-app = Flask(__name__, static_folder='../public')
+# Use absolute path for static folder to avoid resolution issues in Vercel
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, '../public')
+
+app = Flask(__name__, static_folder=STATIC_DIR)
 CORS(app)
+
+@app.before_request
+def log_request_info():
+    # This will show up in Vercel logs
+    print(f"Request: {request.method} {request.path}")
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
@@ -118,10 +127,15 @@ def scrape_with_selenium(url):
         if driver: driver.quit()
 
 @app.route('/')
-def serve_index(): return send_from_directory(app.static_folder, 'index.html')
+def serve_index(): 
+    index_path = os.path.join(app.static_folder, 'index.html')
+    if not os.path.exists(index_path):
+        return f"Error: index.html not found at {index_path}. Static folder is {app.static_folder}", 404
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/<path:path>')
-def serve_static(path): return send_from_directory(app.static_folder, path)
+def serve_static(path): 
+    return send_from_directory(app.static_folder, path)
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
