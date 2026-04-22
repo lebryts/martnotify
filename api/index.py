@@ -196,26 +196,51 @@ def run_cron():
     add_log(f"Scanning for: {query}")
     r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
     
-    # Use the main domain's tradereact API - much more stable than miscreact subdomain
-    url = f"https://trade.indiamart.com/tradereact/getproductlisting?ss={query.replace(' ', '+')}&start=0&limit=40"
+    # Use POST as it's the standard for this endpoint
+    url = "https://trade.indiamart.com/tradereact/getproductlisting"
     
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
             "Referer": "https://trade.indiamart.com/",
             "Origin": "https://trade.indiamart.com",
             "X-Requested-With": "XMLHttpRequest"
         }
+        
+        # Payload that mimics the browser's search request
+        payload = {
+            "ss": query,
+            "start": 0,
+            "limit": 40,
+            "source": "desktop"
+        }
+
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
         if cookie: headers["Cookie"] = cookie
 
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        
         if resp.status_code != 200:
-            add_log(f"❌ API Error {resp.status_code}. Try a fresh login/cookie.")
-            return jsonify({"status": "error"}), 200
-
-        data = resp.json()
+            # If POST fails, try the old-school GET search as a fallback
+            fallback_url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
+            add_log(f"⚠️ API POST failed ({resp.status_code}). Trying fallback...")
+            resp = requests.get(fallback_url, headers=headers, timeout=12)
+            
+            if resp.status_code != 200:
+                add_log(f"❌ Both methods failed ({resp.status_code}). Update Cookie.")
+                return jsonify({"status": "error"}), 200
+            
+            # If fallback worked, it's HTML, but we'll try to find the JSON inside it
+            html = resp.text
+            state_script = re.search(r'window\.__INITIAL_STATE__=(.*?);', html)
+            if state_script:
+                data = json.loads(state_script.group(1))
+            else:
+                return jsonify({"status": "fail", "message": "No data found"}), 200
+        else:
+            data = resp.json()
         leads = data.get('searchlist', []) or data.get('buyleads', [])
         
         if not leads:
