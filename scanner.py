@@ -132,7 +132,11 @@ def main():
             display_id = fields.get("displayid")
             
             # --- FILTERS ---
-            # Status must be OPEN
+            # 1. Skip IDs longer than 12 digits (these are usually stale BizFeed/Marketing items)
+            if display_id and len(str(display_id)) > 12:
+                continue
+
+            # 2. Status must be OPEN
             status = fields.get("purchase_status", "OPEN")
             if status != "OPEN":
                 continue
