@@ -120,20 +120,34 @@ def main():
         data    = response.json()
         results = data.get("results", [])
         
-        lead_titles = [l.get("fields", {}).get("title", "No Title")[:30] for l in results]
-        titles_str = ", ".join(lead_titles[:5]) + "..." if len(lead_titles) > 5 else ", ".join(lead_titles)
-        log(f"Found {len(results)} leads: {titles_str}", r)
+        log(f"--- Scan Results ({len(results)} fetched) ---", r)
+        for i, lead in enumerate(results[:20]):
+            f = lead.get("fields", {})
+            t = f.get("title", "No Title")
+            i_id = f.get("displayid", "N/A")
+            d_type = f.get("datatype", "lead")
+            log(f"[{i+1}] {t[:30]}... ({i_id}) [{d_type}]", r)
 
         found = 0
         for lead in results:
             fields     = lead.get("fields", {})
             display_id = fields.get("displayid")
-            if not display_id or r.sismember("seen_leads", display_id):
-                continue
-
+            
             # --- FILTERS ---
+            # 1. Must be a 'lead' type (skip bizfeed/tenders which are often broken/expired)
+            if fields.get("datatype") != "lead":
+                continue
+            
+            # 2. Must be an 'OPEN' status
             status = fields.get("purchase_status", "OPEN")
             if status != "OPEN":
+                continue
+
+            # 3. Skip 13-digit IDs (often unreliable/transient)
+            if display_id and len(str(display_id)) > 12:
+                continue
+
+            if not display_id or r.sismember("seen_leads", display_id):
                 continue
 
             # Extract date and format nicely
