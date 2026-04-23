@@ -188,129 +188,64 @@ def run_cron():
     except Exception as e:
         return jsonify({"error": f"Redis/Config Error: {e}"}), 500
     
-    url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
-    html = ""
+    url = "https://trade.indiamart.com/tradereact/searchpage"
     
     try:
         browser_ua = r.get("user_agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         headers = {
             "User-Agent": browser_ua,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Referer": "https://trade.indiamart.com/"
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Referer": "https://trade.indiamart.com/buyersearch.mp?ss=cocopeat+block"
         }
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
         if cookie: headers["Cookie"] = cookie
 
-        response = requests.get(url, headers=headers, timeout=10)
+        payload = {
+            "source": "eto.search.lead",
+            "q": query,
+            "options.start": 0,
+            "options.results": 20
+        }
+
+        response = requests.post(url, data=payload, headers=headers, timeout=15)
         if response.status_code != 200:
             add_log(f"HTTP Error: {response.status_code}")
-        html = response.text if response.status_code == 200 else ""
-        
-        if len(html) < 30000 or "verify you are a human" in html.lower() or "cloudflare" in html.lower():
-            add_log(f"Blocked by Anti-Bot. HTML length: {len(html)}")
-            if not REDIS_URL:
-                add_log("Switching to Selenium...")
-                html = scrape_with_selenium(url) or html
-    except Exception as e:
-        add_log(f"Request Exception: {str(e)[:100]}")
-        if not REDIS_URL: html = scrape_with_selenium(url) or ""
-
-    if not html: 
-        add_log("Execution stopped: No HTML retrieved.")
-        return "Fail", 500
-
-    found_leads = []
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # 1. Parse window.__INITIAL_STATE__
-    state_script = soup.find('script', string=re.compile(r'window\.__INITIAL_STATE__'))
-    if state_script:
-        try:
-            state_text = state_script.string.split('window.__INITIAL_STATE__=', 1)[1].strip()
-            if state_text.endswith(';'): state_text = state_text[:-1]
-            state_data = json.loads(state_text)
-            leads_data = state_data.get('searchlist', []) or state_data.get('buyleads', [])
-            if not leads_data and 'searchData' in state_data:
-                leads_data = state_data['searchData'].get('searchlist', [])
+            return "Fail", 500
             
-            if leads_data:
-                add_log(f"Parsing {len(leads_data)} leads from JSON state.")
-                for item in leads_data:
-                    display_id = item.get('displayId') or item.get('offerId')
-                    if not display_id or r.sismember("seen_leads", display_id): continue
-                    
-                    title = item.get('mcatName', "New Lead")
-                    qty_text = item.get('qtyText', "0")
-                    val_text = item.get('orderValueText', "0")
-                    
-                    if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
-                        found_leads.append(display_id)
-                        href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"}, timeout=5)
-                        r.sadd("seen_leads", display_id)
-        except: pass
+        data = response.json()
+        results = data.get("results", [])
+        
+        found_leads = []
+        for lead in results:
+            fields = lead.get("fields", {})
+            display_id = fields.get("displayid")
+            
+            if not display_id or r.sismember("seen_leads", display_id): continue
+            
+            title = fields.get("title", "Unknown Product")
+            city = fields.get("city", "Unknown")
+            isq = fields.get("isqdetails", [])
+            
+            total_qty = 0
+            max_value = 0
+            
+            for detail in isq:
+                if "quantity" in detail.lower(): total_qty = parse_quantity(detail)
+                if "value" in detail.lower(): max_value = parse_value(detail)
 
-    # 2. HTML Parsing using .TRA_con cards (current IndiaMart layout)
-    if not found_leads:
-        cards = soup.select('.TRA_con')
-        skipped_seen = 0
-        skipped_threshold = 0
-        skipped_hidden = 0
-        total_valid = 0
-        add_log(f"Found {len(cards)} card elements in HTML.")
-        for card in cards:
-            # Skip hidden/placeholder cards
-            style = card.get('style', '')
-            if 'hidden' in style or 'height: 0' in style:
-                skipped_hidden += 1
-                continue
-
-            link = card.select_one('h3 a.TRA_link, h3 a[href*="details.mp"]')
-            if not link: continue
-            href = link.get('href', '')
-            if not href.startswith('http'):
-                href = 'https://trade.indiamart.com' + href
-            display_id = parse_qs(urlparse(href).query).get('offer', [None])[0] if 'offer=' in href else None
-            if not display_id: continue
-            total_valid += 1
-            if r.sismember("seen_leads", display_id):
-                skipped_seen += 1
-                continue
-
-            # Extract details from the structured .TRA_details section
-            qty_text = "0"
-            val_text = "0"
-            details = card.select('.TRA_details')
-            if details:
-                detail_block = details[0]
-                qty_labels = detail_block.select('span.TRA_qty')
-                values = detail_block.select('span.TRA_clg6')
-                for i, label_span in enumerate(qty_labels):
-                    label_text = label_span.get_text(strip=True).lower()
-                    value_span = values[i] if i < len(values) else None
-                    if not value_span:
-                        continue
-                    val = value_span.get_text(strip=True)
-                    if 'quantity' == label_text:
-                        qty_text = val
-                    elif 'probable order value' in label_text or 'order value' in label_text:
-                        val_text = val
-
-            if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
+            if total_qty >= min_qty or max_value >= min_val:
                 found_leads.append(display_id)
-                title = link.text.strip() or "New Lead"
-                msg = f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}"
+                href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
+                msg = f"📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value}\n🔗 {href}"
                 requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"}, timeout=5)
                 r.sadd("seen_leads", display_id)
-            else:
-                skipped_threshold += 1
+                
+        add_log(f"API Scan OK. Found {len(found_leads)} matches out of {len(results)} leads.")
+        return jsonify({"leads_found": len(found_leads), "valid": len(results)})
 
-        if skipped_seen or skipped_threshold:
-            add_log(f"Cards: {total_valid} valid, {skipped_seen} already seen, {skipped_threshold} below threshold.")
-
-    r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
-    add_log(f"Scan complete. Found {len(found_leads)} matches.")
-    return jsonify({"status": "ok", "matches": len(found_leads)})
+    except Exception as e:
+        add_log(f"Request Exception: {str(e)[:100]}")
+        return "Fail", 500
 
 if __name__ == '__main__':
     app.run(debug=True)
