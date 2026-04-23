@@ -108,7 +108,7 @@ def main():
         "q": query,
         "options.start": 0,
         "options.results": 20,
-        "options.sort": "releasedate desc"
+        "options.sort": "indexeddate desc"
     }
 
     try:
@@ -129,6 +129,11 @@ def main():
             fields     = lead.get("fields", {})
             display_id = fields.get("displayid")
             if not display_id or r.sismember("seen_leads", display_id):
+                continue
+
+            # --- FILTERS ---
+            status = fields.get("purchase_status", "OPEN")
+            if status != "OPEN":
                 continue
 
             # Extract date and format nicely
@@ -153,7 +158,9 @@ def main():
                 post_display = get_relative_time(raw_post_date)
                 is_today = raw_post_date.split("T")[0] == fields.get("currentdatetime", "").split("T")[0]
             
-            # --- FILTER: ONLY TODAY ---
+            # If user wants ONLY today, we keep this. 
+            # But if IndiaMart is slow to index, we might include yesterday too.
+            # For now, keeping it strict as requested, but adding status check.
             if not is_today:
                 continue
 
