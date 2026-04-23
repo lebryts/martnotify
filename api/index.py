@@ -156,11 +156,14 @@ def update_config():
 
 @app.route('/api/toggle', methods=['POST'])
 def toggle_monitor():
-    data = request.json
-    enable = data.get('enable', False)
-    r.set("monitor_status", "true" if enable else "false")
-    add_log(f"Monitor {'started' if enable else 'stopped'}.")
-    return jsonify({"isRunning": enable})
+    try:
+        data = request.json
+        enable = data.get('enable', False)
+        r.set("monitor_status", "true" if enable else "false")
+        add_log(f"Monitor {'started' if enable else 'stopped'}.")
+        return jsonify({"isRunning": enable})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/cron', methods=['GET'])
 def run_cron():
@@ -169,15 +172,18 @@ def run_cron():
     if secret and request.args.get('secret') != secret:
         return "Unauthorized", 401
 
-    is_manual = request.args.get("manual") == "true"
-    if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
+    try:
+        is_manual = request.args.get("manual") == "true"
+        if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
 
-    query = r.get("config_search_query") or "cocopeat block"
-    min_val = int(r.get("config_min_value") or 1000)
-    min_qty = int(r.get("config_min_qty_kg") or 300)
-    ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
+        query = r.get("config_search_query") or "cocopeat block"
+        min_val = int(r.get("config_min_value") or 1000)
+        min_qty = int(r.get("config_min_qty_kg") or 300)
+        ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
 
-    add_log(f"Scanning for: {query}")
+        add_log(f"Scanning for: {query}")
+    except Exception as e:
+        return jsonify({"error": f"Redis/Config Error: {e}"}), 500
     
     url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
     html = ""
@@ -230,7 +236,7 @@ def run_cron():
                     if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
                         found_leads.append(display_id)
                         href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"})
+                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"}, timeout=5)
                         r.sadd("seen_leads", display_id)
         except: pass
 
@@ -284,7 +290,7 @@ def run_cron():
                 found_leads.append(display_id)
                 title = link.text.strip() or "New Lead"
                 msg = f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}"
-                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"})
+                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"}, timeout=5)
                 r.sadd("seen_leads", display_id)
             else:
                 skipped_threshold += 1
