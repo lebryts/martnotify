@@ -24,7 +24,7 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-app = Flask(__name__, static_folder='../public')
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), '..'))
 CORS(app)
 
 # --- CONFIGURATION & REDIS ---
