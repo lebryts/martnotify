@@ -64,11 +64,15 @@ body {
     gap: 1rem;
 }
 
-.logo .icon { font-size: 2rem; }
+.logo .icon {
+    font-size: 2rem;
+}
+
 .logo h1 {
     font-size: 1.8rem;
     font-weight: 700;
     background: linear-gradient(to right, var(--primary), var(--secondary));
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -103,7 +107,9 @@ body {
 }
 
 @media (max-width: 900px) {
-    .main-grid { grid-template-columns: 1fr; }
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .card {
@@ -122,10 +128,32 @@ body {
 
 h2 {
     font-size: 1.2rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.header-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+
+.btn-text:hover {
+    color: var(--primary);
 }
 
 .input-group {
@@ -207,7 +235,9 @@ input:focus {
     transform: scale(1.02);
 }
 
-.btn:active { transform: scale(0.98); }
+.btn:active {
+    transform: scale(0.98);
+}
 
 .control-card {
     display: flex;
@@ -251,7 +281,9 @@ input:focus {
 }
 
 @media (max-width: 900px) {
-    .logs-card { grid-column: span 1; }
+    .logs-card {
+        grid-column: span 1;
+    }
 }
 
 .log-container {
@@ -270,8 +302,13 @@ input:focus {
     background: rgba(255, 255, 255, 0.02);
 }
 
-.log-entry.system { color: var(--secondary); }
-.log-entry.match { border-left: 3px solid var(--accent-orange); }
+.log-entry.system {
+    color: var(--secondary);
+}
+
+.log-entry.match {
+    border-left: 3px solid var(--accent-orange);
+}
 
 ::-webkit-scrollbar {
     width: 6px;

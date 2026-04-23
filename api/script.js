@@ -14,7 +14,16 @@ const elements = {
     monitorStatus: document.getElementById('monitorStatus'),
     lastCheck: document.getElementById('lastCheck'),
     logContainer: document.getElementById('logContainer'),
-    ntfyUrl: document.getElementById('ntfyUrl')
+    ntfyUrl: document.getElementById('ntfyUrl'),
+    clearLogs: document.getElementById('clearLogs')
+};
+
+// ... existing code ...
+
+elements.clearLogs.onclick = async () => {
+    if (!confirm('Clear all logs?')) return;
+    await fetch(`${API_BASE}/clear-logs`, { method: 'POST' });
+    updateUI();
 };
 
 let isRunning = false;

@@ -168,6 +168,15 @@ def toggle_monitor():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/clear-logs', methods=['POST'])
+def clear_logs():
+    try:
+        r.delete("monitor_logs")
+        add_log("Logs cleared.")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/cron', methods=['GET'])
 def run_cron():
     is_manual = request.args.get('manual') == 'true'
