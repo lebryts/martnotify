@@ -24,8 +24,9 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-app = Flask(__name__, static_folder=os.path.dirname(__file__))
+app = Flask(__name__)
 CORS(app)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
@@ -112,10 +113,12 @@ def scrape_with_selenium(url):
         if driver: driver.quit()
 
 @app.route('/')
-def serve_index(): return send_from_directory(app.static_folder, 'index.html')
+def serve_index():
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/<path:path>')
-def serve_static(path): return send_from_directory(app.static_folder, path)
+def serve_static(path):
+    return send_from_directory(BASE_DIR, path)
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
