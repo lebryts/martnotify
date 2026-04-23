@@ -157,16 +157,19 @@ def main():
                     resp = requests.post(
                         f"https://ntfy.sh/{ntfy_topic}",
                         data=msg.encode("utf-8"),
-                        headers={"Title": "New IndiaMart Lead!", "Priority": "high"},
+                        headers={"Title": "New IndiaMart Lead!", "Priority": "5"},
                         timeout=10
                     )
-                    if resp.status_code != 200:
-                        print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
-                    else:
+                    if resp.status_code == 200:
                         print(f"  📲 Notified: {title} ({city})")
+                        log(f"Alert Sent: {title[:20]}... ({city})", r)
+                        r.sadd("seen_leads", display_id)
+                    else:
+                        print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
+                        log(f"Error: ntfy failed ({resp.status_code})", r)
                 except Exception as ne:
                     print(f"❌ ntfy error: {ne}")
-                r.sadd("seen_leads", display_id)
+                    log(f"Error: ntfy connection failed", r)
 
         log(f"Scan complete. {found} matches out of {len(results)} leads.", r)
 
