@@ -2,9 +2,9 @@ name: IndiaMart Lead Monitor
 
 on:
   schedule:
-    # Runs every 30 minutes (GitHub Actions minimum is 5 min)
-    - cron: '*/30 * * * *'
-  workflow_dispatch:  # Also allows manual trigger from GitHub UI
+    # Every 5 minutes (GitHub Actions minimum interval)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # Allow external triggers (e.g. cron-job.org via GitHub API)
 
 jobs:
   scan:
