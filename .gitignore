@@ -1,9 +1,10 @@
 __pycache__/
 *.pyc
 .env
-*.html
-!public/*.html
-!api/static/*.html
+*_debug.html
+debug.html
+mobile_debug.html
+selenium_debug.html
 node_modules/
 .vercel/
 verify_selectors.py
