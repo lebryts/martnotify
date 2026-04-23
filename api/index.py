@@ -135,9 +135,17 @@ def get_status():
         # Persist the default so it stays stable across calls
         if not r.get("ntfy_topic"):
             r.set("ntfy_topic", ntfy_topic)
+        def safe_int(val, default):
+            if val is None or str(val).lower() == 'none' or not str(val).strip():
+                return default
+            try:
+                return int(float(str(val).replace(",", "")))
+            except:
+                return default
+
         config = {
-            "minValue": int(r.get("config_min_value") or 1000),
-            "minQtyKg": int(r.get("config_min_qty_kg") or 300),
+            "minValue": safe_int(r.get("config_min_value"), 1000),
+            "minQtyKg": safe_int(r.get("config_min_qty_kg"), 300),
             "searchQuery": r.get("config_search_query") or "cocopeat block",
             "ntfyTopic": ntfy_topic,
             "userAgent": r.get("user_agent") or ""
