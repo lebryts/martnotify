@@ -224,3 +224,18 @@ def run_cron():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+@app.route('/api/test-notify', methods=['POST'])
+def test_notify():
+    try:
+        topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
+        requests.post(
+            f"https://ntfy.sh/{topic}",
+            data="🚀 Test notification from MartNotify!".encode("utf-8"),
+            headers={"Title": "MartNotify Test", "Priority": "high"},
+            timeout=10
+        )
+        add_log("Test notification sent.")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500

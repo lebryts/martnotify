@@ -15,10 +15,18 @@ const elements = {
     lastCheck: document.getElementById('lastCheck'),
     logContainer: document.getElementById('logContainer'),
     ntfyUrl: document.getElementById('ntfyUrl'),
-    clearLogs: document.getElementById('clearLogs')
+    clearLogs: document.getElementById('clearLogs'),
+    testNotify: document.getElementById('testNotify')
 };
 
 // ... existing code ...
+
+elements.testNotify.onclick = async () => {
+    elements.testNotify.disabled = true;
+    await fetch(`${API_BASE}/test-notify`, { method: 'POST' });
+    elements.testNotify.disabled = false;
+    alert('Test notification sent! Check your phone.');
+};
 
 elements.clearLogs.onclick = async () => {
     if (!confirm('Clear all logs?')) return;

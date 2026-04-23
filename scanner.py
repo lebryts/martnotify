@@ -154,15 +154,18 @@ def main():
                 href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
                 msg  = f"📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
                 try:
-                    requests.post(
+                    resp = requests.post(
                         f"https://ntfy.sh/{ntfy_topic}",
                         data=msg.encode("utf-8"),
-                        headers={"Title": "Lead Match!", "Priority": "5"},
-                        timeout=5
+                        headers={"Title": "New IndiaMart Lead!", "Priority": "high"},
+                        timeout=10
                     )
-                    print(f"  📲 Notified: {title} ({city})")
+                    if resp.status_code != 200:
+                        print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
+                    else:
+                        print(f"  📲 Notified: {title} ({city})")
                 except Exception as ne:
-                    print(f"  ⚠️ ntfy failed: {ne}")
+                    print(f"❌ ntfy error: {ne}")
                 r.sadd("seen_leads", display_id)
 
         log(f"Scan complete. {found} matches out of {len(results)} leads.", r)
