@@ -72,6 +72,10 @@ def main():
         sys.exit(1)
 
     # Read config from Redis
+    if r.get("monitor_status") != "true":
+        print("⏸️ Monitoring is disabled in dashboard. Skipping scan.")
+        return
+
     query      = r.get("config_search_query") or "cocopeat block"
     min_val    = int(r.get("config_min_value")  or 1000)
     min_qty    = int(r.get("config_min_qty_kg") or 300)

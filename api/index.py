@@ -179,11 +179,28 @@ def run_cron():
         if r.get("monitor_status") != "true" and not is_manual: 
             return "Monitor is disabled", 200
         
-        # We no longer scrape from Vercel to avoid 403s.
-        # This endpoint can now be used to trigger GitHub Actions if needed,
-        # but for now we just return a status message.
-        add_log("Vercel Cron: Scanning is now handled by GitHub Actions.")
-        return jsonify({"status": "proxy_to_github", "message": "Scraping successfully migrated to GitHub Actions to bypass blocks."})
+        if is_manual:
+            # Note: Using GH_PAT from Vercel environment variables
+            pat = os.environ.get('GH_PAT')
+            if not pat:
+                add_log("Manual Trigger Failed: GH_PAT not configured.")
+                return jsonify({"status": "error", "message": "GH_PAT missing"}), 500
+            
+            github_url = "https://api.github.com/repos/lebryts/martnotify/actions/workflows/scan.yml/dispatches"
+            headers = {
+                "Authorization": f"Bearer {pat}",
+                "Accept": "application/vnd.github+json"
+            }
+            res = requests.post(github_url, headers=headers, json={"ref": "main"}, timeout=10)
+            if res.status_code == 204:
+                add_log("Manual Trigger: GitHub Action started successfully.")
+                return jsonify({"status": "triggered", "message": "Scan started on GitHub."})
+            else:
+                add_log(f"Manual Trigger Failed: {res.status_code}")
+                return jsonify({"status": "error", "error": res.text}), 500
+
+        add_log("Vercel Cron: Scheduled scan skipped (handled by GitHub Actions every 5-10m).")
+        return jsonify({"status": "proxy_to_github", "message": "Scraping successfully migrated to GitHub Actions."})
 
     except Exception as e:
         return jsonify({"error": f"Error: {e}"}), 500
