@@ -34,7 +34,10 @@ API_URL        = "https://trade.indiamart.com/tradereact/searchpage"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def log(msg, r=None):
-    ts = datetime.now().strftime('%H:%M:%S')
+    from datetime import timedelta
+    # UTC + 5:30 = IST
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    ts = ist_now.strftime('%H:%M:%S')
     entry = f"{ts} - {msg}"
     print(entry)
     if r:
