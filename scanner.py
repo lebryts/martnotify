@@ -131,9 +131,20 @@ def main():
 
             total_qty = 0
             max_value = 0
+
+            # 1. Check direct fields
+            if fields.get("quantity"):
+                total_qty = parse_quantity(str(fields.get("quantity")))
+            if fields.get("ordervalue"):
+                max_value = parse_value(str(fields.get("ordervalue")))
+
+            # 2. Check ISQ details (sometimes has more specific data)
             for detail in isq:
-                if "quantity" in detail.lower(): total_qty = parse_quantity(detail)
-                if "value"    in detail.lower(): max_value = parse_value(detail)
+                qty_val = parse_quantity(detail)
+                if qty_val > total_qty: total_qty = qty_val
+                
+                val_val = parse_value(detail)
+                if val_val > max_value: max_value = val_val
 
             # Debug lead details
             print(f"DEBUG Lead: {title[:20]} | City: {city} | Qty: {total_qty} | Val: {max_value}")
