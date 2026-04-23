@@ -8,3 +8,5 @@ selenium_debug.html
 node_modules/
 .vercel/
 verify_selectors.py
+.vercel
+.env*.local
