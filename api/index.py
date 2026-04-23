@@ -223,7 +223,7 @@ def run_cron():
                     if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
                         found_leads.append(display_id)
                         href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!"})
+                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"})
                         r.sadd("seen_leads", display_id)
         except: pass
 
@@ -277,7 +277,7 @@ def run_cron():
                 found_leads.append(display_id)
                 title = link.text.strip() or "New Lead"
                 msg = f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}"
-                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!"})
+                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"})
                 r.sadd("seen_leads", display_id)
             else:
                 skipped_threshold += 1
