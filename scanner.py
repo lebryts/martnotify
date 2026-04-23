@@ -111,7 +111,7 @@ def main():
         log(f"Got {len(results)} leads from API", r)
 
         if results:
-            print(f"DEBUG Sample ISQ: {results[0].get('fields', {}).get('isqdetails')}")
+            print(f"DEBUG Sample Leads: {results[0].get('fields')}")
 
         found = 0
         for lead in results:
