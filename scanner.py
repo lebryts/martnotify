@@ -107,15 +107,13 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 30
+        "options.results": 100
     }
 
     try:
         response = requests.post(API_URL, data=payload, headers=headers, timeout=20)
-        log(f"API Response: {response.status_code}", r)
         if response.status_code != 200:
-            log(f"HTTP Error {response.status_code} — check your cookie!", r)
-            print(response.text[:200])
+            log(f"HTTP Error {response.status_code}", r)
             sys.exit(1)
 
         data    = response.json()
@@ -126,8 +124,7 @@ def main():
             f = lead.get("fields", {})
             t = f.get("title", "No Title")
             i_id = f.get("displayid", "N/A")
-            d_type = f.get("datatype", "lead")
-            log(f"[{i+1}] {t[:25]}... ({i_id}) [{d_type}]", r)
+            log(f"[{i+1}] {t[:25]} ({i_id})", r)
 
         found = 0
         for lead in results:
@@ -135,17 +132,9 @@ def main():
             display_id = fields.get("displayid")
             
             # --- FILTERS ---
-            # 1. Must be a 'lead' type (skip bizfeed/tenders which are often broken/expired)
-            if fields.get("datatype") != "lead":
-                continue
-            
-            # 2. Must be an 'OPEN' status
+            # Status must be OPEN
             status = fields.get("purchase_status", "OPEN")
             if status != "OPEN":
-                continue
-
-            # 3. Skip 13-digit IDs (often unreliable/transient)
-            if display_id and len(str(display_id)) > 12:
                 continue
 
             if not display_id or r.sismember("seen_leads", display_id):
