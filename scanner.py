@@ -107,13 +107,15 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 100
+        "options.results": 30
     }
 
     try:
         response = requests.post(API_URL, data=payload, headers=headers, timeout=20)
+        log(f"API Response: {response.status_code}", r)
         if response.status_code != 200:
             log(f"HTTP Error {response.status_code} — check your cookie!", r)
+            print(response.text[:200])
             sys.exit(1)
 
         data    = response.json()
