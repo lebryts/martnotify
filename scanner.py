@@ -42,8 +42,8 @@ def log(msg, r=None):
     print(entry)
     if r:
         try:
-            r.lpush("activity_log", entry)
-            r.ltrim("activity_log", 0, 49)
+            r.lpush("monitor_logs", entry)
+            r.ltrim("monitor_logs", 0, 49)
             r.set("last_check_time", ts)
         except: pass
 
