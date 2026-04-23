@@ -199,16 +199,22 @@ def run_cron():
         if cookie: headers["Cookie"] = cookie
 
         response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            add_log(f"HTTP Error: {response.status_code}")
         html = response.text if response.status_code == 200 else ""
         
-        if len(html) < 30000 or "verify you are a human" in html:
+        if len(html) < 30000 or "verify you are a human" in html.lower() or "cloudflare" in html.lower():
+            add_log(f"Blocked by Anti-Bot. HTML length: {len(html)}")
             if not REDIS_URL:
-                add_log("Request blocked or skeleton. Switching to Selenium...")
+                add_log("Switching to Selenium...")
                 html = scrape_with_selenium(url) or html
     except Exception as e:
+        add_log(f"Request Exception: {str(e)[:100]}")
         if not REDIS_URL: html = scrape_with_selenium(url) or ""
 
-    if not html: return "Fail", 500
+    if not html: 
+        add_log("Execution stopped: No HTML retrieved.")
+        return "Fail", 500
 
     found_leads = []
     soup = BeautifulSoup(html, 'html.parser')
