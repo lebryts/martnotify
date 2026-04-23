@@ -131,9 +131,10 @@ def main():
             if not display_id or r.sismember("seen_leads", display_id):
                 continue
 
-            title = fields.get("title", "Unknown Product")
-            city  = fields.get("city", "Unknown")
-            isq   = fields.get("isqdetails", [])
+            title      = fields.get("title", "Unknown Product")
+            city       = fields.get("city", "Unknown")
+            isq        = fields.get("isqdetails", [])
+            post_date  = fields.get("releasedate") or fields.get("postdate") or "N/A"
 
             total_qty = 0
             max_value = 0
@@ -156,7 +157,7 @@ def main():
             if total_qty >= min_qty or max_value >= min_val:
                 found += 1
                 href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                msg  = f"📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
+                msg  = f"📅 Posted: {post_date}\n📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
                 try:
                     resp = requests.post(
                         f"https://ntfy.sh/{ntfy_topic}",
