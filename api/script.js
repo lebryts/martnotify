@@ -16,10 +16,17 @@ const elements = {
     logContainer: document.getElementById('logContainer'),
     ntfyUrl: document.getElementById('ntfyUrl'),
     clearLogs: document.getElementById('clearLogs'),
+    clearHistory: document.getElementById('clearHistory'),
     testNotify: document.getElementById('testNotify')
 };
 
 // ... existing code ...
+
+elements.clearHistory.onclick = async () => {
+    if (!confirm('This will reset matched leads memory. You will get alerts for old leads again. Continue?')) return;
+    await fetch(`${API_BASE}/clear-history`, { method: 'POST' });
+    updateUI();
+};
 
 elements.testNotify.onclick = async () => {
     elements.testNotify.disabled = true;

@@ -141,6 +141,11 @@ h2 {
     margin-bottom: 1.5rem;
 }
 
+.actions-row {
+    display: flex;
+    gap: 1rem;
+}
+
 .btn-text {
     background: none;
     border: none;

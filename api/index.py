@@ -222,6 +222,15 @@ def run_cron():
     except Exception as e:
         return jsonify({"error": f"Error: {e}"}), 500
 
+@app.route('/api/clear-history', methods=['POST'])
+def clear_history():
+    try:
+        r.delete("seen_leads")
+        add_log("Matched lead history cleared (all leads are new again).")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
 
