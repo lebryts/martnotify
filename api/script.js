@@ -7,6 +7,7 @@ const elements = {
     minValue: document.getElementById('minValue'),
     ntfyTopic: document.getElementById('ntfyTopic'),
     imCookie: document.getElementById('imCookie'),
+    userAgent: document.getElementById('userAgent'),
     saveConfig: document.getElementById('saveConfig'),
     toggleMonitor: document.getElementById('toggleMonitor'),
     scanNow: document.getElementById('scanNow'),
@@ -37,6 +38,7 @@ async function updateUI() {
         if (document.activeElement !== elements.minQty) elements.minQty.value = data.config.minQtyKg || '';
         if (document.activeElement !== elements.minValue) elements.minValue.value = data.config.minValue || '';
         if (document.activeElement !== elements.ntfyTopic) elements.ntfyTopic.value = data.config.ntfyTopic || '';
+        if (data.config.userAgent) elements.userAgent.value = data.config.userAgent;
         // We don't populate the cookie field for security
 
         elements.ntfyUrl.href = `https://ntfy.sh/${data.config.ntfyTopic}`;
@@ -60,7 +62,8 @@ elements.saveConfig.onclick = async () => {
         minQtyKg: parseInt(elements.minQty.value),
         minValue: parseInt(elements.minValue.value),
         ntfyTopic: elements.ntfyTopic.value,
-        imCookie: elements.imCookie.value
+        imCookie: elements.imCookie.value,
+        userAgent: elements.userAgent.value
     };
 
     await fetch(`${API_BASE}/config`, {

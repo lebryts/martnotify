@@ -47,11 +47,15 @@
                     <input type="text" id="ntfyTopic" placeholder="your_private_topic">
                 </div>
 
-                <div class="input-group">
-                    <label>IndiaMart Cookie (Optional but Recommended)</label>
-                    <input type="password" id="imCookie" placeholder="Paste ImeshVisitor cookie here...">
-                    <p class="hint">Required for reliable scraping. Get it from your browser's Network tab.</p>
+                <div class="form-group full-width">
+                    <label for="imCookie">Indiamart Cookie (Session):</label>
+                    <input type="password" id="imCookie" placeholder="Paste full 'Cookie:' string from Network tab here">
                 </div>
+                <div class="form-group full-width">
+                    <label for="userAgent">Browser User-Agent:</label>
+                    <input type="text" id="userAgent" placeholder="Must EXACTLY match the browser you stole the cookie from!">
+                </div>
+                <p class="hint">Required for reliable scraping. Get it from your browser's Network tab.</p>
                 
                 <div class="actions">
                     <button id="saveConfig" class="btn secondary">Update Settings</button>

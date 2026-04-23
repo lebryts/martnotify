@@ -138,7 +138,8 @@ def get_status():
             "minValue": int(r.get("config_min_value") or 1000),
             "minQtyKg": int(r.get("config_min_qty_kg") or 300),
             "searchQuery": r.get("config_search_query") or "cocopeat block",
-            "ntfyTopic": ntfy_topic
+            "ntfyTopic": ntfy_topic,
+            "userAgent": r.get("user_agent") or ""
         }
     except Exception as e: return jsonify({"error": str(e)}), 500
     return jsonify({"isRunning": is_running, "lastStatus": f"Last checked: {last_check}", "logs": logs, "config": config})
@@ -151,6 +152,7 @@ def update_config():
     if 'searchQuery' in data: r.set("config_search_query", str(data['searchQuery']))
     if 'ntfyTopic' in data: r.set("ntfy_topic", str(data['ntfyTopic']))
     if 'imCookie' in data and data['imCookie']: r.set("im_cookie", str(data['imCookie']))
+    if 'userAgent' in data and data['userAgent']: r.set("user_agent", str(data['userAgent']))
     add_log("Configuration updated.")
     return jsonify({"success": True})
 
@@ -190,8 +192,9 @@ def run_cron():
     html = ""
     
     try:
+        browser_ua = r.get("user_agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": browser_ua,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Referer": "https://trade.indiamart.com/"
         }
