@@ -125,6 +125,17 @@ def serve_static(path):
     return "Not found", 404
 
 
+@app.route('/api/debug')
+def debug_info():
+    ua = r.get("user_agent") if r else "No Redis"
+    url = REDIS_URL or "None"
+    return jsonify({
+        "redis_url_start": url[:30] + "...",
+        "redis_url_len": len(url),
+        "is_mock": not REDIS_URL,
+        "user_agent": ua
+    })
+
 @app.route('/api/status', methods=['GET'])
 def get_status():
     try:
