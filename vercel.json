@@ -1,1 +1,21 @@
-{"version":2,"rewrites":[{"source":"/","destination":"/index.html"}]}
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/script.js",
+      "destination": "/script.js"
+    },
+    {
+      "source": "/style.css",
+      "destination": "/style.css"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
