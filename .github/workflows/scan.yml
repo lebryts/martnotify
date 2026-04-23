@@ -1,0 +1,30 @@
+name: IndiaMart Lead Monitor
+
+on:
+  schedule:
+    # Runs every 30 minutes (GitHub Actions minimum is 5 min)
+    - cron: '*/30 * * * *'
+  workflow_dispatch:  # Also allows manual trigger from GitHub UI
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests redis
+
+      - name: Run scanner
+        env:
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          INDIAMART_COOKIE: ${{ secrets.INDIAMART_COOKIE }}
+        run: python3 scanner.py
