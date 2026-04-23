@@ -107,8 +107,7 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 100,
-        "options.sort": "indexeddate desc"
+        "options.results": 100
     }
 
     try:
@@ -166,21 +165,10 @@ def main():
                     return f"{int(diff.days)} days ago"
                 except: return iso_str[:16].replace("T", " ")
 
-            is_recent = False
             post_display = "N/A"
             if "T" in raw_post_date:
                 post_display = get_relative_time(raw_post_date)
-                try:
-                    from datetime import datetime, timedelta
-                    now = datetime.utcnow()
-                    past = datetime.fromisoformat(raw_post_date.replace("Z", ""))
-                    is_recent = (now - past).total_seconds() < 172800 # 48 hours
-                except: pass
             
-            # Filter: only leads from last 48 hours
-            if not is_recent:
-                continue
-
             title      = fields.get("title", "Unknown Product")
             city       = fields.get("city", "Unknown")
             isq        = fields.get("isqdetails", [])
