@@ -96,22 +96,36 @@ def main():
     log(f"Scanning for: {query}", r)
 
     headers = {
-        "User-Agent": user_agent,
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Referer": "https://trade.indiamart.com/buyersearch.mp?ss=cocopeat+block"
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "content-type": "application/json",
+        "origin": "https://trade.indiamart.com",
+        "referer": f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}",
+        "user-agent": user_agent,
+        "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Linux"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "priority": "u=1, i"
     }
     if cookie:
         headers["Cookie"] = cookie
 
     payload = {
-        "source": "eto.search.lead",
-        "q": query,
+        "options.filters.glusrid.data": "",
+        "options.filters.glusrid.type": "value",
+        "options.filters.type.data": "lead",
+        "options.results": 40,
         "options.start": 0,
-        "options.results": 40
+        "q": query,
+        "search_server": "blsearch.indiamart.com",
+        "source": "eto.search.lead"
     }
 
     try:
-        response = requests.post(API_URL, data=payload, headers=headers, timeout=20)
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=20)
         if response.status_code != 200:
             log(f"HTTP Error {response.status_code}", r)
             sys.exit(1)
