@@ -134,7 +134,12 @@ def main():
             title      = fields.get("title", "Unknown Product")
             city       = fields.get("city", "Unknown")
             isq        = fields.get("isqdetails", [])
-            post_date  = fields.get("releasedate") or fields.get("postdate") or "N/A"
+            
+            # Extract date from multiple possible fields
+            post_date  = fields.get("releasedate") or fields.get("postdate") or fields.get("indexeddate") or fields.get("lastactiondate") or "N/A"
+            # Clean up ISO format (2026-04-23T10:59:40Z -> 2026-04-23 10:59)
+            if "T" in post_date:
+                post_date = post_date.replace("T", " ").replace("Z", "")[:16]
 
             total_qty = 0
             max_value = 0
