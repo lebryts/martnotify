@@ -73,7 +73,7 @@ def main():
 
     # Read config from Redis
     if r.get("monitor_status") != "true":
-        print("⏸️ Monitoring is disabled in dashboard. Skipping scan.")
+        log("Monitoring is currently disabled (OFF). Skipping scan.", r)
         return
 
     query      = r.get("config_search_query") or "cocopeat block"
