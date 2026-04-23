@@ -120,12 +120,9 @@ def main():
         log(f"Got {len(results)} leads from API", r)
 
         if results:
-            fields = results[0].get('fields', {})
-            print(f"DEBUG Field Keys: {list(fields.keys())}")
-            print(f"DEBUG Sample ISQ: {fields.get('isqdetails')}")
-            # Check for any other interesting fields
-            for k in ['quantity', 'qty', 'order_value', 'value', 'price', 'amount']:
-                if k in fields: print(f"DEBUG Found {k}: {fields[k]}")
+            f = results[0].get('fields', {})
+            print(f"DEBUG RAW - Title: {f.get('title')} | Qty: '{f.get('quantity')}' | Val: '{f.get('ordervalue')}' | Unit: '{f.get('unit')}'")
+            print(f"DEBUG ISQ: {f.get('isqdetails')}")
 
         found = 0
         for lead in results:
