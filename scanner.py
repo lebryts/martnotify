@@ -16,12 +16,19 @@ Or set up a cron job:
 
 import os
 import re
+import sys
 import requests
 import redis as redis_lib
 from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────────────────────────
-REDIS_URL      = os.environ.get("REDIS_URL", "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379")
+RAW_REDIS_URL = os.environ.get("REDIS_URL", "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379")
+# If it's just a token (doesn't have a scheme), build the URL
+if "://" not in RAW_REDIS_URL:
+    REDIS_URL = f"rediss://default:{RAW_REDIS_URL}@rare-dory-82121.upstash.io:6379"
+else:
+    REDIS_URL = RAW_REDIS_URL
+
 DEFAULT_TOPIC  = "indiamart_leads"
 API_URL        = "https://trade.indiamart.com/tradereact/searchpage"
 # ─────────────────────────────────────────────────────────────────────────────
@@ -31,9 +38,11 @@ def log(msg, r=None):
     entry = f"{ts} - {msg}"
     print(entry)
     if r:
-        r.lpush("activity_log", entry)
-        r.ltrim("activity_log", 0, 49)
-        r.set("last_check_time", ts)
+        try:
+            r.lpush("activity_log", entry)
+            r.ltrim("activity_log", 0, 49)
+            r.set("last_check_time", ts)
+        except: pass
 
 def parse_quantity(qty_str):
     qty_str = qty_str.lower().replace("quantity:", "").strip()
@@ -60,7 +69,7 @@ def main():
         print("✅ Connected to Redis")
     except Exception as e:
         print(f"❌ Redis connection failed: {e}")
-        return
+        sys.exit(1)
 
     # Read config from Redis
     query      = r.get("config_search_query") or "cocopeat block"
@@ -91,7 +100,7 @@ def main():
         response = requests.post(API_URL, data=payload, headers=headers, timeout=20)
         if response.status_code != 200:
             log(f"HTTP Error {response.status_code} — check your cookie!", r)
-            return
+            sys.exit(1)
 
         data    = response.json()
         results = data.get("results", [])
