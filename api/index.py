@@ -24,33 +24,15 @@ try:
 except ImportError:
     SELENIUM_AVAILABLE = False
 
-# Use absolute path for static folder inside the api directory for Vercel bundling
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, 'static')
-
-app = Flask(__name__, static_folder=STATIC_DIR)
+app = Flask(__name__, static_folder='../public')
 CORS(app)
-
-@app.before_request
-def log_request_info():
-    # This will show up in Vercel logs
-    print(f"Request: {request.method} {request.path}")
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
 REDIS_URL = os.environ.get('REDIS_URL')
-
-r = None
-if REDIS_URL and REDIS_URL.strip():
-    try:
-        r = redis.from_url(REDIS_URL, decode_responses=True)
-        # Test connection
-        r.ping()
-    except Exception as e:
-        print(f"Redis Connection Error: {e}. Falling back to MockRedis.")
-        r = None
-
-if not r:
+if REDIS_URL:
+    r = redis.from_url(REDIS_URL, decode_responses=True)
+else:
     class MockRedis:
         def __init__(self): self.data = {}
         def get(self, k): return self.data.get(k)
@@ -67,7 +49,6 @@ if not r:
             if k not in self.data: self.data[k] = set()
             self.data[k].add(v)
         def expire(self, k, t): pass
-        def ping(self): return True
     r = MockRedis()
 
 def add_log(msg):
@@ -96,11 +77,8 @@ def parse_value(val_str):
 
 # --- SCRAPER LOGIC ---
 def scrape_with_selenium(url):
-    if not SELENIUM_AVAILABLE or os.environ.get('VERCEL'):
-        add_log("Selenium not available in this environment.")
-        return None
-    
-    add_log("Starting Selenium...")
+    if not SELENIUM_AVAILABLE: return None
+    add_log("Starting Selenium (Local Mode)...")
     options = Options()
     options.add_argument("--headless")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
@@ -130,15 +108,10 @@ def scrape_with_selenium(url):
         if driver: driver.quit()
 
 @app.route('/')
-def serve_index(): 
-    index_path = os.path.join(app.static_folder, 'index.html')
-    if not os.path.exists(index_path):
-        return f"Error: index.html not found at {index_path}. Static folder is {app.static_folder}", 404
-    return send_from_directory(app.static_folder, 'index.html')
+def serve_index(): return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/<path:path>')
-def serve_static(path): 
-    return send_from_directory(app.static_folder, path)
+def serve_static(path): return send_from_directory(app.static_folder, path)
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
@@ -180,13 +153,13 @@ def toggle_monitor():
 
 @app.route('/api/cron', methods=['GET'])
 def run_cron():
-    is_manual = request.args.get("manual") == "true"
-    cron_secret = os.environ.get('CRON_SECRET', '')
-    provided_secret = request.args.get("secret", "")
-    
-    if not is_manual and cron_secret and provided_secret != cron_secret:
+    # Security check for external cron services (like cron-job.org)
+    secret = os.environ.get('CRON_SECRET')
+    if secret and request.args.get('secret') != secret:
         return "Unauthorized", 401
-    if not is_manual and r.get("monitor_status") != "true": return "Disabled", 200
+
+    is_manual = request.args.get("manual") == "true"
+    if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
 
     query = r.get("config_search_query") or "cocopeat block"
     min_val = int(r.get("config_min_value") or 1000)
@@ -194,81 +167,123 @@ def run_cron():
     ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
 
     add_log(f"Scanning for: {query}")
-    r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
     
-    # Use POST as it's the standard for this endpoint
-    url = "https://trade.indiamart.com/tradereact/getproductlisting"
+    url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
+    html = ""
     
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Content-Type": "application/json",
-            "Referer": "https://trade.indiamart.com/",
-            "Origin": "https://trade.indiamart.com",
-            "X-Requested-With": "XMLHttpRequest"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Referer": "https://trade.indiamart.com/"
         }
-        
-        # Payload that mimics the browser's search request
-        payload = {
-            "ss": query,
-            "start": 0,
-            "limit": 40,
-            "source": "desktop"
-        }
-
         cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
         if cookie: headers["Cookie"] = cookie
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        response = requests.get(url, headers=headers, timeout=10)
+        html = response.text if response.status_code == 200 else ""
         
-        if resp.status_code != 200:
-            # If POST fails, try the old-school GET search as a fallback
-            fallback_url = f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}"
-            add_log(f"⚠️ API POST failed ({resp.status_code}). Trying fallback...")
-            resp = requests.get(fallback_url, headers=headers, timeout=12)
-            
-            if resp.status_code != 200:
-                add_log(f"❌ Both methods failed ({resp.status_code}). Update Cookie.")
-                return jsonify({"status": "error"}), 200
-            
-            # If fallback worked, it's HTML, but we'll try to find the JSON inside it
-            html = resp.text
-            state_script = re.search(r'window\.__INITIAL_STATE__=(.*?);', html)
-            if state_script:
-                data = json.loads(state_script.group(1))
-            else:
-                return jsonify({"status": "fail", "message": "No data found"}), 200
-        else:
-            data = resp.json()
-        leads = data.get('searchlist', []) or data.get('buyleads', [])
-        
-        if not leads:
-            add_log("Scan complete. No leads found in API response.")
-            return jsonify({"status": "ok", "matches": 0})
-
-        found = 0
-        for item in leads:
-            id = item.get('displayId') or item.get('offerId')
-            if not id or r.sismember("seen_leads", id): continue
-            
-            qty_t = item.get('qtyText', "0")
-            val_t = item.get('orderValueText', "0")
-            
-            if parse_quantity(qty_t) >= min_qty or parse_value(val_t) >= min_val:
-                found += 1
-                title = item.get('mcatName', "New Lead")
-                href = f"https://trade.indiamart.com/details.mp?offer={id}"
-                msg = f"📦 {title}\n⚖️ {qty_t}\n💰 {val_t}\n🔗 {href}"
-                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!"})
-                r.sadd("seen_leads", id)
-
-        add_log(f"Scan complete. Found {found} new matching leads.")
-        return jsonify({"status": "ok", "matches": found})
-
+        if len(html) < 30000 or "verify you are a human" in html:
+            if not REDIS_URL:
+                add_log("Request blocked or skeleton. Switching to Selenium...")
+                html = scrape_with_selenium(url) or html
     except Exception as e:
-        add_log(f"Scan Error: {str(e)[:50]}")
-        return jsonify({"status": "error"}), 200
+        if not REDIS_URL: html = scrape_with_selenium(url) or ""
+
+    if not html: return "Fail", 500
+
+    found_leads = []
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # 1. Parse window.__INITIAL_STATE__
+    state_script = soup.find('script', string=re.compile('window\.__INITIAL_STATE__'))
+    if state_script:
+        try:
+            state_text = state_script.string.split('window.__INITIAL_STATE__=', 1)[1].strip()
+            if state_text.endswith(';'): state_text = state_text[:-1]
+            state_data = json.loads(state_text)
+            leads_data = state_data.get('searchlist', []) or state_data.get('buyleads', [])
+            if not leads_data and 'searchData' in state_data:
+                leads_data = state_data['searchData'].get('searchlist', [])
+            
+            if leads_data:
+                add_log(f"Parsing {len(leads_data)} leads from JSON state.")
+                for item in leads_data:
+                    display_id = item.get('displayId') or item.get('offerId')
+                    if not display_id or r.sismember("seen_leads", display_id): continue
+                    
+                    title = item.get('mcatName', "New Lead")
+                    qty_text = item.get('qtyText', "0")
+                    val_text = item.get('orderValueText', "0")
+                    
+                    if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
+                        found_leads.append(display_id)
+                        href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
+                        requests.post(f"https://ntfy.sh/{ntfy_topic}", data=f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}".encode('utf-8'), headers={"Title": "Lead Match!"})
+                        r.sadd("seen_leads", display_id)
+        except: pass
+
+    # 2. HTML Parsing using .TRA_con cards (current IndiaMart layout)
+    if not found_leads:
+        cards = soup.select('.TRA_con')
+        skipped_seen = 0
+        skipped_threshold = 0
+        skipped_hidden = 0
+        total_valid = 0
+        add_log(f"Found {len(cards)} card elements in HTML.")
+        for card in cards:
+            # Skip hidden/placeholder cards
+            style = card.get('style', '')
+            if 'hidden' in style or 'height: 0' in style:
+                skipped_hidden += 1
+                continue
+
+            link = card.select_one('h3 a.TRA_link, h3 a[href*="details.mp"]')
+            if not link: continue
+            href = link.get('href', '')
+            if not href.startswith('http'):
+                href = 'https://trade.indiamart.com' + href
+            display_id = parse_qs(urlparse(href).query).get('offer', [None])[0] if 'offer=' in href else None
+            if not display_id: continue
+            total_valid += 1
+            if r.sismember("seen_leads", display_id):
+                skipped_seen += 1
+                continue
+
+            # Extract details from the structured .TRA_details section
+            qty_text = "0"
+            val_text = "0"
+            details = card.select('.TRA_details')
+            if details:
+                detail_block = details[0]
+                qty_labels = detail_block.select('span.TRA_qty')
+                values = detail_block.select('span.TRA_clg6')
+                for i, label_span in enumerate(qty_labels):
+                    label_text = label_span.get_text(strip=True).lower()
+                    value_span = values[i] if i < len(values) else None
+                    if not value_span:
+                        continue
+                    val = value_span.get_text(strip=True)
+                    if 'quantity' == label_text:
+                        qty_text = val
+                    elif 'probable order value' in label_text or 'order value' in label_text:
+                        val_text = val
+
+            if parse_quantity(qty_text) >= min_qty or parse_value(val_text) >= min_val:
+                found_leads.append(display_id)
+                title = link.text.strip() or "New Lead"
+                msg = f"📦 {title}\n⚖️ {qty_text}\n💰 {val_text}\n🔗 {href}"
+                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!"})
+                r.sadd("seen_leads", display_id)
+            else:
+                skipped_threshold += 1
+
+        if skipped_seen or skipped_threshold:
+            add_log(f"Cards: {total_valid} valid, {skipped_seen} already seen, {skipped_threshold} below threshold.")
+
+    r.set("last_check_time", datetime.now().strftime('%H:%M:%S'))
+    add_log(f"Scan complete. Found {len(found_leads)} matches.")
+    return jsonify({"status": "ok", "matches": len(found_leads)})
 
 if __name__ == '__main__':
     app.run(debug=True)
