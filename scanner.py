@@ -45,7 +45,7 @@ def log(msg, r=None):
         except: pass
 
 def parse_quantity(qty_str):
-    qty_str = qty_str.lower().replace("quantity:", "").strip()
+    qty_str = qty_str.lower().replace("quantity:", "").replace(",", "").strip()
     match = re.search(r"(\d+(\.\d+)?)", qty_str)
     if not match: return 0
     value = float(match.group(1))
@@ -53,7 +53,7 @@ def parse_quantity(qty_str):
     return value
 
 def parse_value(val_str):
-    val_str = val_str.lower().replace("probable order value:", "").strip()
+    val_str = val_str.lower().replace("probable order value:", "").replace(",", "").strip()
     multiplier = 1
     if "lakh" in val_str: multiplier = 100000
     elif "cr" in val_str: multiplier = 10000000
