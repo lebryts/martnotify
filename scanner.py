@@ -119,10 +119,6 @@ def main():
         results = data.get("results", [])
         log(f"Got {len(results)} leads from API", r)
 
-        if results:
-            f = results[0].get('fields', {})
-            print(f"DEBUG RAW - Title: {f.get('title')} | Qty: '{f.get('quantity')}' | Val: '{f.get('ordervalue')}' | Unit: '{f.get('unit')}'")
-            print(f"DEBUG ISQ: {f.get('isqdetails')}")
 
         found = 0
         for lead in results:
@@ -152,8 +148,6 @@ def main():
                 val_val = parse_value(detail)
                 if val_val > max_value: max_value = val_val
 
-            # Debug lead details
-            print(f"DEBUG Lead: {title[:20]} | City: {city} | Qty: {total_qty} | Val: {max_value}")
 
             if total_qty >= min_qty or max_value >= min_val:
                 found += 1
