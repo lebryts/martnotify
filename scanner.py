@@ -107,7 +107,8 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 20
+        "options.results": 20,
+        "options.sort": "releasedate desc"
     }
 
     try:
@@ -118,8 +119,10 @@ def main():
 
         data    = response.json()
         results = data.get("results", [])
-        log(f"Got {len(results)} leads from API", r)
-
+        
+        lead_titles = [l.get("fields", {}).get("title", "No Title")[:30] for l in results]
+        titles_str = ", ".join(lead_titles[:5]) + "..." if len(lead_titles) > 5 else ", ".join(lead_titles)
+        log(f"Found {len(results)} leads: {titles_str}", r)
 
         found = 0
         for lead in results:
