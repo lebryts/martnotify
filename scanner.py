@@ -29,9 +29,6 @@ if "://" not in RAW_REDIS_URL:
 else:
     REDIS_URL = RAW_REDIS_URL
 
-# Debug print (masked)
-print(f"DEBUG: REDIS_URL starts with: {REDIS_URL[:15]}... ({len(REDIS_URL)} chars)")
-
 DEFAULT_TOPIC  = "indiamart_leads"
 API_URL        = "https://trade.indiamart.com/tradereact/searchpage"
 # ─────────────────────────────────────────────────────────────────────────────
