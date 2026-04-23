@@ -189,7 +189,7 @@ def main():
             if total_qty >= min_qty or max_value >= min_val:
                 found += 1
                 href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
+                msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {city}\n📝 Status: {status}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
                 try:
                     resp = requests.post(
                         f"https://ntfy.sh/{ntfy_topic}",
