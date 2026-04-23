@@ -131,16 +131,36 @@ def main():
             if not display_id or r.sismember("seen_leads", display_id):
                 continue
 
+            # Extract date and format nicely
+            raw_post_date = fields.get("releasedate") or fields.get("postdate") or fields.get("indexeddate") or fields.get("lastactiondate") or "N/A"
+            
+            def get_relative_time(iso_str):
+                try:
+                    from datetime import datetime
+                    now = datetime.utcnow()
+                    past = datetime.fromisoformat(iso_str.replace("Z", ""))
+                    diff = now - past
+                    seconds = diff.total_seconds()
+                    if seconds < 60: return "Just now"
+                    if seconds < 3600: return f"{int(seconds//60)} min ago"
+                    if seconds < 86400: return f"{int(seconds//3600)} hr ago"
+                    return f"{int(diff.days)} days ago"
+                except: return iso_str[:16].replace("T", " ")
+
+            post_display = "N/A"
+            is_today = False
+            if "T" in raw_post_date:
+                post_display = get_relative_time(raw_post_date)
+                is_today = raw_post_date.split("T")[0] == fields.get("currentdatetime", "").split("T")[0]
+            
+            # --- FILTER: ONLY TODAY ---
+            if not is_today:
+                continue
+
             title      = fields.get("title", "Unknown Product")
             city       = fields.get("city", "Unknown")
             isq        = fields.get("isqdetails", [])
             
-            # Extract date from multiple possible fields
-            post_date  = fields.get("releasedate") or fields.get("postdate") or fields.get("indexeddate") or fields.get("lastactiondate") or "N/A"
-            # Clean up ISO format (2026-04-23T10:59:40Z -> 2026-04-23 10:59)
-            if "T" in post_date:
-                post_date = post_date.replace("T", " ").replace("Z", "")[:16]
-
             total_qty = 0
             max_value = 0
 
@@ -162,7 +182,7 @@ def main():
             if total_qty >= min_qty or max_value >= min_val:
                 found += 1
                 href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                msg  = f"📅 Posted: {post_date}\n📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
+                msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
                 try:
                     resp = requests.post(
                         f"https://ntfy.sh/{ntfy_topic}",
