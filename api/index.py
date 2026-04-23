@@ -26,7 +26,6 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app)
-BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'public')
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
@@ -112,14 +111,6 @@ def scrape_with_selenium(url):
         return None
     finally:
         if driver: driver.quit()
-
-@app.route('/')
-def serve_index():
-    return send_from_directory(BASE_DIR, 'index.html')
-
-@app.route('/<path:path>')
-def serve_static(path):
-    return send_from_directory(BASE_DIR, path)
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
