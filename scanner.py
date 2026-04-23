@@ -22,7 +22,7 @@ import redis as redis_lib
 from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────────────────────────
-RAW_REDIS_URL = os.environ.get("REDIS_URL", "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379")
+RAW_REDIS_URL = os.environ.get("REDIS_URL", "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379").strip()
 # If it's just a token (doesn't have a scheme), build the URL
 if "://" not in RAW_REDIS_URL:
     REDIS_URL = f"rediss://default:{RAW_REDIS_URL}@rare-dory-82121.upstash.io:6379"
