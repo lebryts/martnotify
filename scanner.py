@@ -107,7 +107,7 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 100
+        "options.results": 40
     }
 
     try:
