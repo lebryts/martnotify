@@ -111,7 +111,12 @@ def main():
         log(f"Got {len(results)} leads from API", r)
 
         if results:
-            print(f"DEBUG Sample Leads: {results[0].get('fields')}")
+            fields = results[0].get('fields', {})
+            print(f"DEBUG Field Keys: {list(fields.keys())}")
+            print(f"DEBUG Sample ISQ: {fields.get('isqdetails')}")
+            # Check for any other interesting fields
+            for k in ['quantity', 'qty', 'order_value', 'value', 'price', 'amount']:
+                if k in fields: print(f"DEBUG Found {k}: {fields[k]}")
 
         found = 0
         for lead in results:
