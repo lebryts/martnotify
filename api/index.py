@@ -26,7 +26,7 @@ except ImportError:
 
 app = Flask(__name__)
 CORS(app)
-BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'public')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
