@@ -170,83 +170,23 @@ def toggle_monitor():
 
 @app.route('/api/cron', methods=['GET'])
 def run_cron():
-    is_manual = request.args.get("manual") == "true"
-    
-    # Security check for external cron services (only require secret for automated cron)
+    is_manual = request.args.get('manual') == 'true'
     secret = os.environ.get('CRON_SECRET')
     if secret and not is_manual and request.args.get('secret') != secret:
         return "Unauthorized", 401
 
     try:
-        if not is_manual and r.get("monitor_status") != "true": return "Monitor is disabled", 200
-
-        query = r.get("config_search_query") or "cocopeat block"
-        min_val = int(r.get("config_min_value") or 1000)
-        min_qty = int(r.get("config_min_qty_kg") or 300)
-        ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
-
-        add_log(f"Scanning for: {query}")
-    except Exception as e:
-        return jsonify({"error": f"Redis/Config Error: {e}"}), 500
-    
-    url = "https://trade.indiamart.com/tradereact/searchpage"
-    
-    try:
-        browser_ua = r.get("user_agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        headers = {
-            "User-Agent": browser_ua,
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Referer": "https://trade.indiamart.com/buyersearch.mp?ss=cocopeat+block"
-        }
-        cookie = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE")
-        if cookie: headers["Cookie"] = cookie
-
-        payload = {
-            "source": "eto.search.lead",
-            "q": query,
-            "options.start": 0,
-            "options.results": 20
-        }
-
-        response = requests.post(url, data=payload, headers=headers, timeout=15)
-        if response.status_code != 200:
-            add_log(f"HTTP Error: {response.status_code}")
-            return "Fail", 500
-            
-        data = response.json()
-        results = data.get("results", [])
+        if r.get("monitor_status") != "true" and not is_manual: 
+            return "Monitor is disabled", 200
         
-        found_leads = []
-        for lead in results:
-            fields = lead.get("fields", {})
-            display_id = fields.get("displayid")
-            
-            if not display_id or r.sismember("seen_leads", display_id): continue
-            
-            title = fields.get("title", "Unknown Product")
-            city = fields.get("city", "Unknown")
-            isq = fields.get("isqdetails", [])
-            
-            total_qty = 0
-            max_value = 0
-            
-            for detail in isq:
-                if "quantity" in detail.lower(): total_qty = parse_quantity(detail)
-                if "value" in detail.lower(): max_value = parse_value(detail)
-
-            if total_qty >= min_qty or max_value >= min_val:
-                found_leads.append(display_id)
-                href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                msg = f"📦 {title}\n📍 {city}\n⚖️ {total_qty} KG\n💰 Rs. {max_value}\n🔗 {href}"
-                requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers={"Title": "Lead Match!", "Priority": "5"}, timeout=5)
-                r.sadd("seen_leads", display_id)
-                
-        add_log(f"API Scan OK. Found {len(found_leads)} matches out of {len(results)} leads.")
-        return jsonify({"leads_found": len(found_leads), "valid": len(results)})
+        # We no longer scrape from Vercel to avoid 403s.
+        # This endpoint can now be used to trigger GitHub Actions if needed,
+        # but for now we just return a status message.
+        add_log("Vercel Cron: Scanning is now handled by GitHub Actions.")
+        return jsonify({"status": "proxy_to_github", "message": "Scraping successfully migrated to GitHub Actions to bypass blocks."})
 
     except Exception as e:
-        add_log(f"Request Exception: {str(e)[:100]}")
-        return "Fail", 500
+        return jsonify({"error": f"Error: {e}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
