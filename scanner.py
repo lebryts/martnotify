@@ -127,6 +127,9 @@ def main():
                 if "quantity" in detail.lower(): total_qty = parse_quantity(detail)
                 if "value"    in detail.lower(): max_value = parse_value(detail)
 
+            # Debug lead details
+            print(f"DEBUG Lead: {title[:20]} | City: {city} | Qty: {total_qty} | Val: {max_value}")
+
             if total_qty >= min_qty or max_value >= min_val:
                 found += 1
                 href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
