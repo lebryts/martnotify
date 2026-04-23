@@ -107,7 +107,7 @@ def main():
         "source": "eto.search.lead",
         "q": query,
         "options.start": 0,
-        "options.results": 20,
+        "options.results": 100,
         "options.sort": "indexeddate desc"
     }
 
@@ -120,13 +120,13 @@ def main():
         data    = response.json()
         results = data.get("results", [])
         
-        log(f"--- Scan Results ({len(results)} fetched) ---", r)
+        log(f"--- Top 20 / {len(results)} Leads Fetched ---", r)
         for i, lead in enumerate(results[:20]):
             f = lead.get("fields", {})
             t = f.get("title", "No Title")
             i_id = f.get("displayid", "N/A")
             d_type = f.get("datatype", "lead")
-            log(f"[{i+1}] {t[:30]}... ({i_id}) [{d_type}]", r)
+            log(f"[{i+1}] {t[:25]}... ({i_id}) [{d_type}]", r)
 
         found = 0
         for lead in results:
@@ -155,7 +155,7 @@ def main():
             
             def get_relative_time(iso_str):
                 try:
-                    from datetime import datetime
+                    from datetime import datetime, timedelta
                     now = datetime.utcnow()
                     past = datetime.fromisoformat(iso_str.replace("Z", ""))
                     diff = now - past
@@ -166,16 +166,19 @@ def main():
                     return f"{int(diff.days)} days ago"
                 except: return iso_str[:16].replace("T", " ")
 
+            is_recent = False
             post_display = "N/A"
-            is_today = False
             if "T" in raw_post_date:
                 post_display = get_relative_time(raw_post_date)
-                is_today = raw_post_date.split("T")[0] == fields.get("currentdatetime", "").split("T")[0]
+                try:
+                    from datetime import datetime, timedelta
+                    now = datetime.utcnow()
+                    past = datetime.fromisoformat(raw_post_date.replace("Z", ""))
+                    is_recent = (now - past).total_seconds() < 172800 # 48 hours
+                except: pass
             
-            # If user wants ONLY today, we keep this. 
-            # But if IndiaMart is slow to index, we might include yesterday too.
-            # For now, keeping it strict as requested, but adding status check.
-            if not is_today:
+            # Filter: only leads from last 48 hours
+            if not is_recent:
                 continue
 
             title      = fields.get("title", "Unknown Product")
