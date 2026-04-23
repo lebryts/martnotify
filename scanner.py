@@ -77,8 +77,17 @@ def main():
         return
 
     query      = r.get("config_search_query") or "cocopeat block"
-    min_val    = int(r.get("config_min_value")  or 1000)
-    min_qty    = int(r.get("config_min_qty_kg") or 300)
+    
+    def safe_int(val, default):
+        if val is None or str(val).lower() == 'none' or not str(val).strip():
+            return default
+        try:
+            return int(float(str(val).replace(",", "")))
+        except:
+            return default
+
+    min_val    = safe_int(r.get("config_min_value"), 1000)
+    min_qty    = safe_int(r.get("config_min_qty_kg"), 300)
     ntfy_topic = r.get("ntfy_topic") or DEFAULT_TOPIC
     cookie     = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE", "")
     user_agent = r.get("user_agent") or "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
