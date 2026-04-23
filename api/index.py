@@ -31,8 +31,12 @@ CORS(app)
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
-    r = redis.from_url(REDIS_URL, decode_responses=True)
-else:
+    try:
+        r = redis.from_url(REDIS_URL, decode_responses=True)
+    except Exception as e:
+        print(f"Redis connection error: {e}")
+        REDIS_URL = None # Force fallback to MockRedis
+if not REDIS_URL:
     class MockRedis:
         def __init__(self): self.data = {}
         def get(self, k): return self.data.get(k)
@@ -196,7 +200,7 @@ def run_cron():
     soup = BeautifulSoup(html, 'html.parser')
     
     # 1. Parse window.__INITIAL_STATE__
-    state_script = soup.find('script', string=re.compile('window\.__INITIAL_STATE__'))
+    state_script = soup.find('script', string=re.compile(r'window\.__INITIAL_STATE__'))
     if state_script:
         try:
             state_text = state_script.string.split('window.__INITIAL_STATE__=', 1)[1].strip()
