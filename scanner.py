@@ -48,21 +48,26 @@ def log(msg, r=None):
         except: pass
 
 def parse_quantity(qty_str):
-    qty_str = qty_str.lower().replace("quantity:", "").replace(",", "").strip()
-    match = re.search(r"(\d+(\.\d+)?)", qty_str)
-    if not match: return 0
-    value = float(match.group(1))
-    if "ton" in qty_str or "mt" in qty_str: return value * 1000
-    return value
+    qty_str = qty_str.lower().replace(",", "").strip()
+    # Find numbers and their following words/units
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*([a-z\s]*)", qty_str)
+    best = 0
+    for num_str, suffix in matches:
+        try:
+            val = float(num_str)
+            if any(x in suffix for x in ["ton", "mt"]): val *= 1000
+            if val > best: best = val
+        except: continue
+    return best
 
 def parse_value(val_str):
-    val_str = val_str.lower().replace("probable order value:", "").replace(",", "").strip()
+    val_str = val_str.lower().replace(",", "").strip()
     multiplier = 1
     if "lakh" in val_str: multiplier = 100000
-    elif "cr" in val_str: multiplier = 10000000
-    numbers = re.findall(r"(\d+(\.\d+)?)", val_str)
+    if "cr" in val_str or "crore" in val_str: multiplier = 10000000
+    numbers = re.findall(r"(\d+(?:\.\d+)?)", val_str)
     if not numbers: return 0
-    return max([float(n[0]) for n in numbers]) * multiplier
+    return max([float(n) for n in numbers]) * multiplier
 
 def main():
     # Connect to Redis
@@ -182,48 +187,44 @@ def main():
                 post_display = get_relative_time(raw_post_date)
             
             title      = fields.get("title", "Unknown Product")
-            city       = fields.get("city", "Unknown")
+            city       = fields.get("city_string") or fields.get("city") or "India"
+            state      = fields.get("state") or ""
+            location   = f"{city}, {state}".strip(", ")
             isq        = fields.get("isqdetails", [])
             
-            total_qty = 0
-            max_value = 0
+            # --- DATA EXTRACTION ---
+            # Maximize results by checking multiple fields
+            candidates_qty = [str(fields.get("quantity", ""))] + [str(x) for x in isq]
+            total_qty = max([parse_quantity(c) for c in candidates_qty]) if candidates_qty else 0
+            
+            candidates_val = [str(fields.get("ordervalue", "")), str(fields.get("tendervalue", ""))] + [str(x) for x in isq]
+            max_value = max([parse_value(c) for c in candidates_val]) if candidates_val else 0
 
-            # 1. Check direct fields
-            if fields.get("quantity"):
-                total_qty = parse_quantity(str(fields.get("quantity")))
-            if fields.get("ordervalue"):
-                max_value = parse_value(str(fields.get("ordervalue")))
+            # --- FILTERS ---
+            # Only alert if QUANTITY matches. Value is often unreliable as the price of 1 piece.
+            if total_qty < min_qty:
+                continue
 
-            # 2. Check ISQ details (sometimes has more specific data)
-            for detail in isq:
-                qty_val = parse_quantity(detail)
-                if qty_val > total_qty: total_qty = qty_val
-                
-                val_val = parse_value(detail)
-                if val_val > max_value: max_value = val_val
-
-
-            if total_qty >= min_qty or max_value >= min_val:
-                found += 1
-                href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
-                msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {city}\n📝 Status: {status}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
-                try:
-                    resp = requests.post(
-                        f"https://ntfy.sh/{ntfy_topic}",
-                        data=msg.encode("utf-8"),
-                        headers={"Title": "New IndiaMart Lead!", "Priority": "5"},
-                        timeout=10
-                    )
-                    if resp.status_code == 200:
-                        print(f"  📲 Notified: {title} ({city})")
-                        log(f"Alert Sent: {title[:20]}... ({city})", r)
-                        r.sadd("seen_leads", display_id)
-                    else:
-                        print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
-                        log(f"Error: ntfy failed ({resp.status_code})", r)
-                except Exception as ne:
-                    print(f"❌ ntfy error: {ne}")
-                    log(f"Error: ntfy connection failed", r)
+            found += 1
+            href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
+            msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {location}\n📝 Status: {status}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
+            try:
+                resp = requests.post(
+                    f"https://ntfy.sh/{ntfy_topic}",
+                    data=msg.encode("utf-8"),
+                    headers={"Title": "New IndiaMart Lead!", "Priority": "5"},
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    print(f"  📲 Notified: {title} ({city})")
+                    log(f"Alert Sent: {title[:20]}... ({city})", r)
+                    r.sadd("seen_leads", display_id)
+                else:
+                    print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
+                    log(f"Error: ntfy failed ({resp.status_code})", r)
+            except Exception as ne:
+                print(f"❌ ntfy error: {ne}")
+                log(f"Error: ntfy connection failed", r)
 
         log(f"Scan complete. {found} matches out of {len(results)} leads.", r)
 
