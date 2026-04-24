@@ -193,15 +193,35 @@ def main():
             isq        = fields.get("isqdetails", [])
             
             # --- DATA EXTRACTION ---
-            # Maximize results by checking multiple fields
-            candidates_qty = [str(fields.get("quantity", ""))] + [str(x) for x in isq]
-            total_qty = max([parse_quantity(c) for c in candidates_qty]) if candidates_qty else 0
+            # 1. Extract raw numbers for Qty and Value
+            unit_qty = 0
+            block_weight = 1 
+            qty_is_pieces = False
             
+            for detail in [str(fields.get("quantity", ""))] + [str(x) for x in isq]:
+                d = detail.lower()
+                q = parse_quantity(d)
+                if q > 0:
+                    if "piece" in d or "pc" in d or "box" in d or "bag" in d:
+                        unit_qty = q
+                        qty_is_pieces = True
+                    elif "weight" in d or "size" in d or "kg" in d:
+                        # Extract weight per item
+                        block_weight = q
+                    else:
+                        if q > unit_qty: unit_qty = q
+
+            # Multiplication Logic for: "320 pieces" x "5 Kg"
+            if qty_is_pieces and block_weight > 1:
+                total_qty = unit_qty * block_weight
+            else:
+                total_qty = max(unit_qty, block_weight) if not qty_is_pieces else unit_qty
+
+            # 2. Value Extraction (picks higher end of range)
             candidates_val = [str(fields.get("ordervalue", "")), str(fields.get("tendervalue", ""))] + [str(x) for x in isq]
             max_value = max([parse_value(c) for c in candidates_val]) if candidates_val else 0
 
             # --- FILTERS ---
-            # Only alert if QUANTITY matches. Value is often unreliable as the price of 1 piece.
             if total_qty < min_qty:
                 continue
 
