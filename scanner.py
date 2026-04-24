@@ -198,7 +198,13 @@ def main():
             block_weight = 1 
             qty_is_pieces = False
             
-            for detail in [str(fields.get("quantity", ""))] + [str(x) for x in isq]:
+            # Check all possible quantity field names (capitalized and lowercase)
+            qty_candidates = [
+                str(fields.get("quantity", "")),
+                str(fields.get("Quantity", ""))
+            ] + [str(x) for x in isq]
+            
+            for detail in qty_candidates:
                 d = detail.lower()
                 q = parse_quantity(d)
                 if q > 0:
