@@ -186,6 +186,7 @@ def clear_logs():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/cron', methods=['GET'])
+@app.route('/api/scan', methods=['GET'])
 def run_cron():
     is_manual = request.args.get('manual') == 'true'
     secret = os.environ.get('CRON_SECRET')
@@ -196,11 +197,11 @@ def run_cron():
         if r.get("monitor_status") != "true" and not is_manual: 
             return "Monitor is disabled", 200
         
-        if is_manual:
-            # Note: Using GH_PAT from Vercel environment variables
+        if is_manual or (secret and request.args.get('secret') == secret):
+            # Trigger GitHub Action
             pat = os.environ.get('GH_PAT')
             if not pat:
-                add_log("Manual Trigger Failed: GH_PAT not configured.")
+                add_log("Trigger Failed: GH_PAT not configured.")
                 return jsonify({"status": "error", "message": "GH_PAT missing"}), 500
             
             github_url = "https://api.github.com/repos/lebryts/martnotify/actions/workflows/scan.yml/dispatches"
@@ -210,14 +211,13 @@ def run_cron():
             }
             res = requests.post(github_url, headers=headers, json={"ref": "main"}, timeout=10)
             if res.status_code == 204:
-                add_log("Manual Trigger: GitHub Action started successfully.")
+                add_log(f"Triggered Scan: GitHub Action started via {'Manual' if is_manual else 'External Cron'}.")
                 return jsonify({"status": "triggered", "message": "Scan started on GitHub."})
             else:
-                add_log(f"Manual Trigger Failed: {res.status_code}")
+                add_log(f"Trigger Failed: {res.status_code}")
                 return jsonify({"status": "error", "error": res.text}), 500
 
-        add_log("Vercel Cron: Scheduled scan skipped (handled by GitHub Actions every 5-10m).")
-        return jsonify({"status": "proxy_to_github", "message": "Scraping successfully migrated to GitHub Actions."})
+        return jsonify({"status": "skipped", "message": "No valid trigger."})
 
     except Exception as e:
         return jsonify({"error": f"Error: {e}"}), 500
