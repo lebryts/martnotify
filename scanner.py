@@ -200,7 +200,7 @@ def main():
             
             # Check all possible quantity field names (capitalized and lowercase)
             qty_candidates = [
-                str(fields.get("quantity", "")),
+                # str(fields.get("quantity", "")),
                 str(fields.get("Quantity", ""))
             ] + [str(x) for x in isq]
             
