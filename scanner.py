@@ -173,6 +173,7 @@ def run_scan(r_client=None):
         except: pass
 
         found = 0
+        skipped_seen = 0
         for lead in results:
             fields     = lead.get("fields", {})
             display_id = fields.get("displayid")
@@ -269,7 +270,9 @@ def run_scan(r_client=None):
 
             # --- FILTERS ---
             if total_qty < min_qty:
-                # log(f"  ⏭️ Skipped {display_id}: {total_qty}KG < {min_qty}KG", r)
+                continue
+            
+            if max_value > 0 and max_value < min_val:
                 continue
 
             if not display_id:
@@ -277,13 +280,11 @@ def run_scan(r_client=None):
             
             is_seen = (r and r.sismember("seen_leads", display_id))
             if is_seen:
-                # log(f"  ⏭️ Already notified: {display_id}", r) # Don't spam logs with seen items
+                skipped_seen += 1
                 continue
 
             # Found a new high-value match!
             if found >= 10:
-                # log("  ⚠️ Notification limit reached for this scan (max 10). Skipping alert.", r)
-                # We still count matches but don't notify
                 found += 1
                 continue
 
@@ -309,7 +310,7 @@ def run_scan(r_client=None):
                 print(f"❌ ntfy error: {ne}")
                 log(f"Error: ntfy connection failed", r)
 
-        log(f"Scan complete. {found} matches out of {len(results)} leads.", r)
+        log(f"Scan complete. Found {found} matches ({skipped_seen} were already notified).", r)
         return True
 
     except Exception as e:

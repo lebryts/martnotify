@@ -51,19 +51,30 @@ if REDIS_URL:
 if not REDIS_URL:
     class MockRedis:
         def __init__(self): self.data = {}
+        def ping(self): return True
         def get(self, k): return self.data.get(k)
-        def set(self, k, v): self.data[k] = v
+        def set(self, k, v): self.data[k] = str(v)
+        def delete(self, k): 
+            if k in self.data: del self.data[k]
         def lpush(self, k, v): 
             if k not in self.data: self.data[k] = []
+            if not isinstance(self.data[k], list): self.data[k] = []
             self.data[k].insert(0, v)
-        def lrange(self, k, s, e): return self.data.get(k, [])[s:e+1 if e != -1 else None]
-        def ltrim(self, k, s, e): self.data[k] = self.data.get(k, [])[s:e+1 if e != -1 else None]
+        def lrange(self, k, s, e): 
+            vals = self.data.get(k, [])
+            if not isinstance(vals, list): return []
+            return vals[s:e+1 if e != -1 else None]
+        def ltrim(self, k, m, n):
+            vals = self.data.get(k, [])
+            if isinstance(vals, list): self.data[k] = vals[m:n+1 if n != -1 else None]
         def sismember(self, k, v): 
             seen = self.data.get(k, set())
-            return v in seen
+            if not isinstance(seen, set): return False
+            return str(v) in seen
         def sadd(self, k, v):
             if k not in self.data: self.data[k] = set()
-            self.data[k].add(v)
+            if not isinstance(self.data[k], set): self.data[k] = {self.data[k]} if self.data[k] else set()
+            self.data[k].add(str(v))
         def expire(self, k, t): pass
     r = MockRedis()
 
