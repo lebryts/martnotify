@@ -26,7 +26,11 @@ const elements = {
 
 elements.clearHistory.onclick = async () => {
     if (!confirm('This will reset matched leads memory. You will get alerts for old leads again. Continue?')) return;
-    await fetch(`${API_BASE}/clear-history`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/clear-history`, { method: 'POST' });
+    if (!res.ok) {
+        const err = await res.json();
+        alert('Failed to clear: ' + (err.message || 'Unknown error'));
+    }
     updateUI();
 };
 
@@ -39,7 +43,11 @@ elements.testNotify.onclick = async () => {
 
 elements.clearLogs.onclick = async () => {
     if (!confirm('Clear all logs?')) return;
-    await fetch(`${API_BASE}/clear-logs`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/clear-logs`, { method: 'POST' });
+    if (!res.ok) {
+        const err = await res.json();
+        alert('Failed to clear: ' + (err.message || 'Unknown error'));
+    }
     updateUI();
 };
 

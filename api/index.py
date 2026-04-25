@@ -199,10 +199,15 @@ def toggle_monitor():
 @app.route('/api/clear-logs', methods=['POST'])
 def clear_logs():
     try:
-        r.delete("monitor_logs")
-        add_log("Logs cleared.")
+        # Re-check connection
+        try: r.ping()
+        except: pass
+        
+        # LTRIM 1 0 is the Redis way to empty a list
+        r.ltrim("monitor_logs", 1, 0)
         return jsonify({"status": "success"})
     except Exception as e:
+        add_log(f"ERROR: Could not clear logs: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/cron', methods=['GET'])
@@ -253,10 +258,15 @@ def run_cron():
 @app.route('/api/clear-history', methods=['POST'])
 def clear_history():
     try:
+        # Re-check connection
+        try: r.ping()
+        except: pass
+        
         r.delete("seen_leads")
         add_log("Matched lead history cleared (all leads are new again).")
         return jsonify({"status": "success"})
     except Exception as e:
+        add_log(f"ERROR: Could not clear history: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/processed-leads', methods=['GET'])
