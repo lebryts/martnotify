@@ -10,6 +10,15 @@ from flask_cors import CORS
 from bs4 import BeautifulSoup
 import redis
 from urllib.parse import urlparse, parse_qs
+import sys
+from os.path import dirname, abspath, join
+
+# Add root to path so we can import scanner
+sys.path.append(dirname(dirname(abspath(__file__))))
+try:
+    from scanner import run_scan
+except ImportError:
+    run_scan = None
 
 # Optional Selenium for local robust scraping
 try:
@@ -201,8 +210,16 @@ def run_cron():
             # Trigger GitHub Action
             pat = os.environ.get('GH_PAT')
             if not pat:
-                add_log("Trigger Failed: GH_PAT not configured.")
-                return jsonify({"status": "error", "message": "GH_PAT missing"}), 500
+                if run_scan:
+                    add_log("GH_PAT not configured. Running scan locally...")
+                    success = run_scan(r_client=r)
+                    if success:
+                        return jsonify({"status": "completed", "message": "Scan completed locally."})
+                    else:
+                        return jsonify({"status": "error", "message": "Local scan failed."}), 500
+                else:
+                    add_log("Trigger Failed: GH_PAT not configured and scanner module not found.")
+                    return jsonify({"status": "error", "message": "GH_PAT missing and no local scanner"}), 500
             
             github_url = "https://api.github.com/repos/lebryts/martnotify/actions/workflows/scan.yml/dispatches"
             headers = {
@@ -230,6 +247,21 @@ def clear_history():
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/processed-leads', methods=['GET'])
+def get_processed_leads():
+    try:
+        # Move up one level from 'api/' to find root
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        fpath = os.path.join(root, "processed_leads.txt")
+        if not os.path.exists(fpath):
+            return jsonify({"content": "No scan results available yet."})
+        
+        with open(fpath, "r") as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

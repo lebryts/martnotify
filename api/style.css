@@ -323,3 +323,25 @@ input:focus {
     background: var(--border);
     border-radius: 10px;
 }
+
+.audit-card {
+    grid-column: span 2;
+    margin-top: 2rem;
+}
+
+.audit-container {
+    height: 400px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    padding: 1rem;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+}
+
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text);
+}

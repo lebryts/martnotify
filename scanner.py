@@ -18,11 +18,13 @@ import os
 import re
 import sys
 import requests
+import json
+import time
 import redis as redis_lib
 from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────────────────────────
-RAW_REDIS_URL = os.environ.get("REDIS_URL", "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379").strip()
+RAW_REDIS_URL = (os.environ.get("REDIS_URL") or "rediss://default:gQAAAAAAAUDJAAIgcDE0N2ViOTEzMzZkYzQ0Y2EyYTEzYmM0MmNjZGEyZWViYg@rare-dory-82121.upstash.io:6379").strip()
 # If it's just a token (doesn't have a scheme), build the URL
 if "://" not in RAW_REDIS_URL:
     REDIS_URL = f"rediss://default:{RAW_REDIS_URL}@rare-dory-82121.upstash.io:6379"
@@ -69,104 +71,120 @@ def parse_value(val_str):
     if not numbers: return 0
     return max([float(n) for n in numbers]) * multiplier
 
-def main():
-    # Connect to Redis
-    try:
-        r = redis_lib.from_url(REDIS_URL, decode_responses=True)
-        r.ping()
-        print("✅ Connected to Redis")
-    except Exception as e:
-        print(f"❌ Redis connection failed: {e}")
-        sys.exit(1)
+def run_scan(r_client=None):
+    r = r_client
+    if not r and REDIS_URL:
+        for attempt in range(3):
+            try:
+                r = redis_lib.from_url(REDIS_URL, decode_responses=True, socket_timeout=5, retry_on_timeout=True)
+                r.ping()
+                print(f"✅ Connected to Redis (Attempt {attempt+1})")
+                break
+            except Exception as e:
+                print(f"❌ Redis connection failed (Attempt {attempt+1}): {e}")
+                r = None
+                time.sleep(1)
 
-    # Read config from Redis
-    if r.get("monitor_status") != "true":
-        log("Monitoring is currently disabled (OFF). Skipping scan.", r)
-        return
+    # ── Configuration (Fetched from Dashboard/Redis) ──────────────────────────
+    query = "cocopeat block"
+    min_qty = 0
+    min_val = 0
+    ntfy_topic = DEFAULT_TOPIC
+    cookie = os.environ.get("INDIAMART_COOKIE", "")
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-    query      = r.get("config_search_query") or "cocopeat block"
-    
-    def safe_int(val, default):
-        if val is None or str(val).lower() == 'none' or not str(val).strip():
-            return default
+    if r:
         try:
-            return int(float(str(val).replace(",", "")))
-        except:
-            return default
+            # Match keys exactly with api/index.py
+            query = r.get("config_search_query") or r.get("search_query") or query
+            min_qty = float(r.get("config_min_qty_kg") or r.get("min_qty") or min_qty)
+            min_val = float(r.get("config_min_value") or r.get("min_val") or min_val)
+            ntfy_topic = r.get("ntfy_topic") or ntfy_topic
+            cookie = r.get("im_cookie") or r.get("indiamart_cookie") or cookie
+            ua = r.get("user_agent") or ua
+            
+            m_status = r.get("monitor_status") or r.get("monitoring_status") or "true"
+            if str(m_status).lower() in ["off", "false"]:
+                log(f"Monitoring is currently disabled ({m_status}). Skipping scan.", r)
+                return False
+        except Exception as e:
+            print(f"Error reading config from Redis: {e}. Using defaults.")
 
-    min_val    = safe_int(r.get("config_min_value"), 1000)
-    min_qty    = safe_int(r.get("config_min_qty_kg"), 300)
-    ntfy_topic = str(r.get("ntfy_topic") or DEFAULT_TOPIC).strip().replace("\n", "").replace("\r", "")
-    if ntfy_topic.lower() == "none": ntfy_topic = DEFAULT_TOPIC
-    cookie     = r.get("im_cookie") or os.environ.get("INDIAMART_COOKIE", "")
-    user_agent = r.get("user_agent") or "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
-
-    log(f"Scanning for: {query}", r)
-
-    headers = {
-        "accept": "*/*",
-        "accept-language": "en-US,en;q=0.9",
-        "content-type": "application/json",
-        "origin": "https://trade.indiamart.com",
-        "referer": f"https://trade.indiamart.com/buyersearch.mp?ss={query.replace(' ', '+')}",
-        "user-agent": user_agent,
-        "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Linux"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "priority": "u=1, i"
-    }
-    if cookie:
-        headers["Cookie"] = cookie
-
-    payload = {
-        "options.filters.glusrid.data": "",
-        "options.filters.glusrid.type": "value",
-        "options.filters.type.data": "lead",
-        "options.results": 40,
-        "options.start": 0,
-        "q": query,
-        "search_server": "blsearch.indiamart.com",
-        "source": "eto.search.lead"
-    }
+    log(f"Scan Config: Query='{query}', MinQty={min_qty}kg, MinValue=₹{min_val}", r)
+    # ─────────────────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────────
 
     try:
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=20)
-        if response.status_code != 200:
-            log(f"HTTP Error {response.status_code}", r)
-            sys.exit(1)
+        headers = {"User-Agent": ua}
+        if cookie: headers["Cookie"] = cookie
 
-        data    = response.json()
-        results = data.get("results", [])
-        
-        log(f"--- Top 20 / {len(results)} Leads Fetched ---", r)
-        for i, lead in enumerate(results[:20]):
-            f = lead.get("fields", {})
-            t = f.get("title", "No Title")
-            i_id = f.get("displayid", "N/A")
-            log(f"[{i+1}] {t[:25]} ({i_id})", r)
+        def fetch_leads(start_index):
+            payload = {
+                "options.filters.glusrid.data": "",
+                "options.filters.glusrid.type": "value",
+                "options.filters.type.data": "lead",
+                "options.results": 20,
+                "options.start": start_index,
+                "q": query,
+                "search_server": "blsearch.indiamart.com",
+                "source": "eto.search.lead"
+            }
+            try:
+                res = requests.post(API_URL, json=payload, headers=headers, timeout=20)
+                if res.status_code == 200:
+                    return res.json().get("results", [])
+                else:
+                    log(f"HTTP Error {res.status_code} at index {start_index}", r)
+                    return []
+            except Exception as e:
+                log(f"Fetch Error at {start_index}: {e}", r)
+                return []
+
+        try:
+            # Fetch 60 leads total in 3 batches
+            batch1 = fetch_leads(0)
+            batch2 = fetch_leads(20)
+            batch3 = fetch_leads(40)
+            results = batch1 + batch2 + batch3
+            
+            # Debug: Save to file for inspection
+            try:
+                with open("debug_data.json", "w") as f:
+                    json.dump({"results": results, "total_fetched": len(results)}, f, indent=4)
+                log(f"Leads (Total {len(results)}) saved to debug_data.json for inspection.", r)
+            except Exception as fe:
+                log(f"Failed to save debug file: {fe}", r)
+
+            log(f"--- All {len(results)} Leads Fetched ---", r)
+            for i, lead in enumerate(results):
+                f = lead.get("fields", {})
+                t = f.get("title", "No Title")
+                i_id = f.get("displayid", "N/A")
+                log(f"[{i+1}] {t[:25]} ({i_id})", r)
+
+        except Exception as e:
+            log(f"Fetch Error: {e}", r)
+            return False
+
+        processed_file = "processed_leads.txt"
+        try:
+            with open(processed_file, "w") as pf:
+                pf.write(f"--- Scan at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n\n")
+        except: pass
 
         found = 0
         for lead in results:
             fields     = lead.get("fields", {})
             display_id = fields.get("displayid")
             
-            # --- FILTERS ---
-            # 1. Skip IDs longer than 12 digits (these are usually stale BizFeed/Marketing items)
             if display_id and len(str(display_id)) > 12:
                 continue
 
-            # 2. Status must be OPEN
             status = fields.get("purchase_status", "OPEN")
             if status != "OPEN":
                 continue
 
-            if not display_id or r.sismember("seen_leads", display_id):
-                continue
-
-            # Extract date and format nicely
+            # Extract dates
             raw_post_date = fields.get("releasedate") or fields.get("postdate") or fields.get("indexeddate") or fields.get("lastactiondate") or "N/A"
             
             def get_relative_time(iso_str):
@@ -192,47 +210,86 @@ def main():
             location   = f"{city}, {state}".strip(", ")
             isq        = fields.get("isqdetails", [])
             
-            # --- DATA EXTRACTION ---
-            # 1. Extract raw numbers for Qty and Value
-            unit_qty = 0
-            block_weight = 1 
-            qty_is_pieces = False
+            # --- INTELLIGENT QUANTITY EXTRACTION ---
+            unit_count = 0
+            block_weight = 1
+            is_explicit_weight = False
             
-            # Check all possible quantity field names (capitalized and lowercase)
-            qty_candidates = [
-                # str(fields.get("quantity", "")),
-                str(fields.get("Quantity", ""))
-            ] + [str(x) for x in isq]
+            qty_candidates = [title, str(fields.get("Quantity", ""))] + [str(x) for x in isq]
             
             for detail in qty_candidates:
                 d = detail.lower()
-                q = parse_quantity(d)
-                if q > 0:
-                    if "piece" in d or "pc" in d or "box" in d or "bag" in d:
-                        unit_qty = q
-                        qty_is_pieces = True
-                    elif "weight" in d or "size" in d or "kg" in d:
-                        # Extract weight per item
-                        block_weight = q
+                # 1. Skip price/value fields
+                if any(x in d for x in ["value", "price", "rs", "rupee", "budget"]):
+                    continue
+                
+                num = parse_quantity(d)
+                if num <= 0: continue
+                
+                # 2. Check context
+                if any(x in d for x in ["weight", "per", "size", "spec", "mass"]):
+                    # If it says "Weight per block: 5kg", block_weight = 5
+                    block_weight = num
+                elif any(x in d for x in ["qty", "quantity", "piece", "pc", "nos", "bag", "box", "unit"]):
+                    # If this specific string has weight, mark as explicit
+                    if any(x in d for x in ["kg", "ton", "mt"]):
+                        unit_count = num
+                        is_explicit_weight = True
                     else:
-                        if q > unit_qty: unit_qty = q
+                        unit_count = num
+                        is_explicit_weight = False
+                elif any(x in d for x in ["kg", "ton", "mt"]):
+                     # Just a weight mentioned in a field (often already total weight)
+                     if num > unit_count: unit_count = num
+                     is_explicit_weight = True
 
-            # Multiplication Logic for: "320 pieces" x "5 Kg"
-            if qty_is_pieces and block_weight > 1:
-                total_qty = unit_qty * block_weight
+            # Calculate total
+            if not is_explicit_weight and block_weight > 1:
+                total_qty = unit_count * block_weight
             else:
-                total_qty = max(unit_qty, block_weight) if not qty_is_pieces else unit_qty
+                total_qty = unit_count if unit_count > 0 else block_weight
 
-            # 2. Value Extraction (picks higher end of range)
+            # --- VALUE EXTRACTION ---
             candidates_val = [str(fields.get("ordervalue", "")), str(fields.get("tendervalue", ""))] + [str(x) for x in isq]
-            max_value = max([parse_value(c) for c in candidates_val]) if candidates_val else 0
+            max_value = 0
+            for c in candidates_val:
+                cv = c.lower()
+                if any(x in cv for x in ["value", "price", "rs", "rupee", "budget"]):
+                    val = parse_value(cv)
+                    if val > max_value: max_value = val
+
+            # Construct the message
+            href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
+            debug_msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {location}\n📝 Status: {status}\n⚖️ {total_qty} KG (Parsed)\n💰 Rs. {max_value:,.0f} (Parsed)\n🔗 {href}\n"
+            
+            try:
+                with open(processed_file, "a") as pf:
+                    pf.write(f"--- Lead {display_id} ---\n{debug_msg}\n")
+            except: pass
 
             # --- FILTERS ---
             if total_qty < min_qty:
+                # log(f"  ⏭️ Skipped {display_id}: {total_qty}KG < {min_qty}KG", r)
+                continue
+
+            if not display_id:
+                continue
+            
+            is_seen = (r and r.sismember("seen_leads", display_id))
+            if is_seen:
+                # log(f"  ⏭️ Already notified: {display_id}", r) # Don't spam logs with seen items
+                continue
+
+            # Found a new high-value match!
+            if found >= 10:
+                # log("  ⚠️ Notification limit reached for this scan (max 10). Skipping alert.", r)
+                # We still count matches but don't notify
+                found += 1
                 continue
 
             found += 1
-            href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
+            log(f"  ⭐ MATCH FOUND! {title[:20]}... ({total_qty} KG)", r)
+            
             msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {location}\n📝 Status: {status}\n⚖️ {total_qty} KG\n💰 Rs. {max_value:,.0f}\n🔗 {href}"
             try:
                 resp = requests.post(
@@ -244,7 +301,7 @@ def main():
                 if resp.status_code == 200:
                     print(f"  📲 Notified: {title} ({city})")
                     log(f"Alert Sent: {title[:20]}... ({city})", r)
-                    r.sadd("seen_leads", display_id)
+                    if r: r.sadd("seen_leads", display_id)
                 else:
                     print(f"❌ ntfy failed: {resp.status_code} {resp.text}")
                     log(f"Error: ntfy failed ({resp.status_code})", r)
@@ -253,9 +310,14 @@ def main():
                 log(f"Error: ntfy connection failed", r)
 
         log(f"Scan complete. {found} matches out of {len(results)} leads.", r)
+        return True
 
     except Exception as e:
         log(f"Error: {e}", r)
+        return False
+
+def main():
+    run_scan()
 
 if __name__ == "__main__":
     main()

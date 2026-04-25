@@ -17,7 +17,9 @@ const elements = {
     ntfyUrl: document.getElementById('ntfyUrl'),
     clearLogs: document.getElementById('clearLogs'),
     clearHistory: document.getElementById('clearHistory'),
-    testNotify: document.getElementById('testNotify')
+    testNotify: document.getElementById('testNotify'),
+    auditContent: document.getElementById('auditContent'),
+    refreshAudit: document.getElementById('refreshAudit')
 };
 
 // ... existing code ...
@@ -73,6 +75,8 @@ async function updateUI() {
             const isMatch = log.includes('Lead Match') || log.includes('Alert Sent');
             return `<div class="log-entry ${isMatch ? 'match' : ''}">${log}</div>`;
         }).join('');
+
+        updateAuditLog();
 
     } catch (err) {
         console.error('Failed to fetch status:', err);
@@ -172,6 +176,21 @@ setInterval(() => {
         elements.lastCheck.textContent += ` | Next scan in ${mins}m ${secs.toString().padStart(2, '0')}s`;
     }
 }, 5000);
+
+async function updateAuditLog() {
+    try {
+        const res = await fetch(`${API_BASE}/processed-leads`);
+        const data = await res.json();
+        if (data.content) {
+            elements.auditContent.textContent = data.content;
+        }
+    } catch (err) {
+        console.error('Failed to fetch audit log:', err);
+    }
+}
+
+elements.refreshAudit.onclick = updateAuditLog;
+
 updateUI();
 
 // If already monitoring on page load, start the auto-scan loop

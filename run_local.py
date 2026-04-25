@@ -3,7 +3,7 @@ from api.index import app
 
 if __name__ == '__main__':
     # Set dummy environment variables for local test
-    os.environ['REDIS_URL'] = "" # Will use mock
+    os.environ['REDIS_URL'] = "MOCK" # Force immediate fallback if desired, or let it use default
     os.environ['CRON_SECRET'] = "test_secret"
     
     print("Starting local test server at http://localhost:5000")
