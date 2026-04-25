@@ -143,9 +143,9 @@ def run_scan(r_client=None):
         try:
             # Fetch 60 leads total in 3 batches
             batch1 = fetch_leads(0)
-            batch2 = fetch_leads(20)
-            batch3 = fetch_leads(40)
-            results = batch1 + batch2 + batch3
+            # batch2 = fetch_leads(20)
+            # batch3 = fetch_leads(40)
+            results = batch1 #+ batch2 + batch3
             
             # Debug: Save to file for inspection
             try:
