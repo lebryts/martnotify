@@ -39,7 +39,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
-REDIS_URL = os.environ.get('REDIS_URL') or "redis://default:gQAAAAAAAV3dAAIgcDJkMGRmYWMyYWNkZGE0NzUzYTNmZGMyMjRlZGFhMjE1Nw@top-fly-89565.upstash.io:6379"
+REDIS_URL = os.environ.get('REDIS_URL') or "rediss://default:gQAAAAAAAV3dAAIgcDJkMGRmYWMyYWNkZGE0NzUzYTNmZGMyMjRlZGFhMjE1Nw@top-fly-89565.upstash.io:6379"
 
 if REDIS_URL:
     try:
