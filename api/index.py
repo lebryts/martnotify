@@ -39,7 +39,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- CONFIGURATION & REDIS ---
 DEFAULT_NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'indiamart_leads')
-REDIS_URL = os.environ.get('REDIS_URL') or "rediss://default:gQAAAAAAAV3dAAIgcDJkMGRmYWMyYWNkZGE0NzUzYTNmZGMyMjRlZGFhMjE1Nw@top-fly-89565.upstash.io:6379"
+REDIS_URL = os.environ.get('REDIS_URL')
 
 if REDIS_URL:
     try:
@@ -79,10 +79,16 @@ if not REDIS_URL:
     r = MockRedis()
 
 def add_log(msg):
-    log_entry = f"{datetime.now().strftime('%H:%M:%S')} - {msg}"
+    from datetime import timedelta
+    # Use IST (UTC+5:30) for logs
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    log_entry = f"{ist_now.strftime('%H:%M:%S')} - {msg}"
     print(log_entry)
-    r.lpush("monitor_logs", log_entry)
-    r.ltrim("monitor_logs", 0, 49)
+    if REDIS_URL:
+        try:
+            r.lpush("monitor_logs", log_entry)
+            r.ltrim("monitor_logs", 0, 49)
+        except: pass
 
 def parse_quantity(qty_str):
     if not qty_str: return 0

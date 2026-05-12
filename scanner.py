@@ -24,12 +24,7 @@ import redis as redis_lib
 from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────────────────────────
-RAW_REDIS_URL = (os.environ.get("REDIS_URL") or "rediss://default:gQAAAAAAAV3dAAIgcDJkMGRmYWMyYWNkZGE0NzUzYTNmZGMyMjRlZGFhMjE1Nw@top-fly-89565.upstash.io:6379").strip()
-# If it's just a token (doesn't have a scheme), build the URL
-if "://" not in RAW_REDIS_URL:
-    REDIS_URL = f"rediss://default:{RAW_REDIS_URL}@top-fly-89565.upstash.io:6379"
-else:
-    REDIS_URL = RAW_REDIS_URL
+REDIS_URL = (os.environ.get("REDIS_URL") or "").strip()
 
 DEFAULT_TOPIC  = "indiamart_leads"
 API_URL        = "https://trade.indiamart.com/tradereact/searchpage"
@@ -47,7 +42,8 @@ def log(msg, r=None):
             r.lpush("monitor_logs", entry)
             r.ltrim("monitor_logs", 0, 49)
             r.set("last_check_time", ts)
-        except: pass
+        except Exception as e:
+            print(f"Failed to push log to Redis: {e}")
 
 def parse_quantity(qty_str):
     qty_str = qty_str.lower().replace(",", "").strip()
