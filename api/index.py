@@ -160,7 +160,7 @@ def get_status():
         is_running = r.get("monitor_status") == "true"
         last_check = r.get("last_check_time") or "Never"
         logs = r.lrange("monitor_logs", 0, -1)
-        ntfy_topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
+        ntfy_topic = (r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC).strip()
         # Persist the default so it stays stable across calls
         if not r.get("ntfy_topic"):
             r.set("ntfy_topic", ntfy_topic)
@@ -294,7 +294,7 @@ if __name__ == '__main__':
 @app.route('/api/test-notify', methods=['POST'])
 def test_notify():
     try:
-        topic = r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC
+        topic = (r.get("ntfy_topic") or DEFAULT_NTFY_TOPIC).strip()
         requests.post(
             f"https://ntfy.sh/{topic}",
             data="🚀 Test notification from MartNotify!".encode("utf-8"),

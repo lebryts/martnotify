@@ -106,7 +106,7 @@ def run_scan(r_client=None):
             query = r.get("config_search_query") or r.get("search_query") or query
             min_qty = float(r.get("config_min_qty_kg") or r.get("min_qty") or min_qty)
             min_val = float(r.get("config_min_value") or r.get("min_val") or min_val)
-            ntfy_topic = r.get("ntfy_topic") or ntfy_topic
+            ntfy_topic = (r.get("ntfy_topic") or ntfy_topic).strip()
             cookie = r.get("im_cookie") or r.get("indiamart_cookie") or cookie
             ua = r.get("user_agent") or ua
             
