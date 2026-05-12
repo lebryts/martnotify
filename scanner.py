@@ -70,16 +70,23 @@ def parse_value(val_str):
 def run_scan(r_client=None):
     r = r_client
     if not r and REDIS_URL:
+        if "://" not in REDIS_URL:
+            print(f"⚠️ Warning: REDIS_URL does not look like a full URL (missing '://'). It might be just a token.")
+        
         for attempt in range(3):
             try:
+                # Basic parsing check
+                print(f"Attempting to connect to Redis (Attempt {attempt+1})...")
                 r = redis_lib.from_url(REDIS_URL, decode_responses=True, socket_timeout=5, retry_on_timeout=True)
                 r.ping()
-                print(f"✅ Connected to Redis (Attempt {attempt+1})")
+                print(f"✅ Connected to Redis successfully!")
                 break
             except Exception as e:
-                print(f"❌ Redis connection failed (Attempt {attempt+1}): {e}")
+                print(f"❌ Redis connection failed: {e}")
                 r = None
                 time.sleep(1)
+    elif not REDIS_URL:
+        print("❌ Error: REDIS_URL is empty. Cannot connect to Redis.")
 
     # ── Configuration (Fetched from Dashboard/Redis) ──────────────────────────
     query = "cocopeat block"
