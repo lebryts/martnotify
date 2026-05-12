@@ -278,14 +278,9 @@ def clear_history():
 @app.route('/api/processed-leads', methods=['GET'])
 def get_processed_leads():
     try:
-        # Move up one level from 'api/' to find root
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        fpath = os.path.join(root, "processed_leads.txt")
-        if not os.path.exists(fpath):
-            return jsonify({"content": "No scan results available yet."})
-        
-        with open(fpath, "r") as f:
-            content = f.read()
+        content = r.get("scan_results")
+        if not content:
+            return jsonify({"content": "No scan results available yet in Redis."})
         return jsonify({"content": content})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

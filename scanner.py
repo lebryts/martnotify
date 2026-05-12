@@ -107,6 +107,8 @@ def run_scan(r_client=None):
             print(f"Error reading config from Redis: {e}. Using defaults.")
 
     log(f"Scan Config: Query='{query}', MinQty={min_qty}kg, MinValue=₹{min_val}", r)
+    if r:
+        r.set("monitor_status", "true") # Reset to true if we are running
     # ─────────────────────────────────────────────────────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────────
 
@@ -162,11 +164,7 @@ def run_scan(r_client=None):
             log(f"Fetch Error: {e}", r)
             return False
 
-        processed_file = "processed_leads.txt"
-        try:
-            with open(processed_file, "w") as pf:
-                pf.write(f"--- Scan at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n\n")
-        except: pass
+        scan_summary = f"--- Scan at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n\n"
 
         found = 0
         skipped_seen = 0
@@ -259,10 +257,7 @@ def run_scan(r_client=None):
             href = f"https://trade.indiamart.com/details.mp?offer={display_id}"
             debug_msg  = f"📅 Posted: {post_display}\n📦 {title}\n📍 {location}\n📝 Status: {status}\n⚖️ {total_qty} KG (Parsed)\n💰 Rs. {max_value:,.0f} (Parsed)\n🔗 {href}\n"
             
-            try:
-                with open(processed_file, "a") as pf:
-                    pf.write(f"--- Lead {display_id} ---\n{debug_msg}\n")
-            except: pass
+            scan_summary += f"--- Lead {display_id} ---\n{debug_msg}\n"
 
             # --- FILTERS ---
             if total_qty < min_qty:
@@ -307,6 +302,11 @@ def run_scan(r_client=None):
                 log(f"Error: ntfy connection failed", r)
 
         log(f"Scan complete. Found {found} matches ({skipped_seen} were already notified).", r)
+        if r:
+            try:
+                r.set("scan_results", scan_summary)
+            except Exception as e:
+                print(f"Failed to push scan results to Redis: {e}")
         return True
 
     except Exception as e:
