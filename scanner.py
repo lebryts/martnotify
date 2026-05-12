@@ -15,6 +15,9 @@ Or set up a cron job:
 """
 
 import os
+from dotenv import load_dotenv
+# Load environment variables from .env.local if it exists
+load_dotenv(".env.local")
 import re
 import sys
 import requests
@@ -35,13 +38,14 @@ def log(msg, r=None):
     # UTC + 5:30 = IST
     ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
     ts = ist_now.strftime('%H:%M:%S')
+    full_ts = ist_now.strftime('%Y-%m-%d %H:%M:%S')
     entry = f"{ts} - {msg}"
     print(entry)
     if r:
         try:
             r.lpush("monitor_logs", entry)
             r.ltrim("monitor_logs", 0, 49)
-            r.set("last_check_time", ts)
+            r.set("last_check_time", full_ts)
         except Exception as e:
             print(f"Failed to push log to Redis: {e}")
 

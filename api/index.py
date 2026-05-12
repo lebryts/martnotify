@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+# Load environment variables from .env.local if it exists
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env.local"))
 import re
 import time
 import random
