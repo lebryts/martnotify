@@ -183,7 +183,7 @@ setInterval(() => {
         const secs = secsLeft % 60;
         elements.lastCheck.textContent += ` | Next scan in ${mins}m ${secs.toString().padStart(2, '0')}s`;
     }
-}, 5000);
+}, 15000);
 
 async function updateAuditLog() {
     try {
