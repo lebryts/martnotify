@@ -100,10 +100,19 @@ def run_scan(r_client=None):
     cookie = os.environ.get("INDIAMART_COOKIE", "")
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+    queries = [query]
+
     if r:
         try:
             # Match keys exactly with api/index.py
-            query = r.get("config_search_query") or r.get("search_query") or query
+            raw_query = r.get("config_search_query") or r.get("search_query") or query
+            try:
+                if raw_query.strip().startswith("["):
+                    queries = json.loads(raw_query)
+                else:
+                    queries = [q.strip() for q in raw_query.split(",") if q.strip()]
+            except Exception:
+                queries = [raw_query]
             min_qty = float(r.get("config_min_qty_kg") or r.get("min_qty") or min_qty)
             min_val = float(r.get("config_min_value") or r.get("min_val") or min_val)
             ntfy_topic = (r.get("ntfy_topic") or ntfy_topic).strip()
@@ -117,7 +126,7 @@ def run_scan(r_client=None):
         except Exception as e:
             print(f"Error reading config from Redis: {e}. Using defaults.")
 
-    log(f"Scan Config: Query='{query}', MinQty={min_qty}kg, MinValue=₹{min_val}", r)
+    log(f"Scan Config: Queries={queries}, MinQty={min_qty}kg, MinValue=₹{min_val}", r)
     if r:
         r.set("monitor_status", "true") # Reset to true if we are running
     # ─────────────────────────────────────────────────────────────────────────────
@@ -127,14 +136,14 @@ def run_scan(r_client=None):
         headers = {"User-Agent": ua}
         if cookie: headers["Cookie"] = cookie
 
-        def fetch_leads(start_index):
+        def fetch_leads(q_str, start_index):
             payload = {
                 "options.filters.glusrid.data": "",
                 "options.filters.glusrid.type": "value",
                 "options.filters.type.data": "lead",
                 "options.results": 20,
                 "options.start": start_index,
-                "q": query,
+                "q": q_str,
                 "search_server": "blsearch.indiamart.com",
                 "source": "eto.search.lead"
             }
@@ -143,18 +152,29 @@ def run_scan(r_client=None):
                 if res.status_code == 200:
                     return res.json().get("results", [])
                 else:
-                    log(f"HTTP Error {res.status_code} at index {start_index}", r)
+                    log(f"HTTP Error {res.status_code} at index {start_index} for '{q_str}'", r)
                     return []
             except Exception as e:
-                log(f"Fetch Error at {start_index}: {e}", r)
+                log(f"Fetch Error at {start_index} for '{q_str}': {e}", r)
                 return []
 
         try:
-            # Fetch 60 leads total in 3 batches
-            batch1 = fetch_leads(0)
-            # batch2 = fetch_leads(20)
-            # batch3 = fetch_leads(40)
-            results = batch1 #+ batch2 + batch3
+            all_results = []
+            for q_str in queries:
+                log(f"Fetching leads for query: '{q_str}'", r)
+                batch = fetch_leads(q_str, 0)
+                all_results.extend(batch)
+            
+            # Remove duplicates based on displayid if any
+            results = []
+            seen_ids = set()
+            for lead in all_results:
+                d_id = lead.get("fields", {}).get("displayid")
+                if d_id and d_id not in seen_ids:
+                    seen_ids.add(d_id)
+                    results.append(lead)
+                elif not d_id:
+                    results.append(lead)
             
             # Debug: Save to file for inspection
             try:

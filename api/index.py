@@ -172,10 +172,19 @@ def get_status():
             except:
                 return default
 
+        raw_query = r.get("config_search_query") or "cocopeat block"
+        try:
+            if raw_query.startswith("["):
+                search_query = json.loads(raw_query)
+            else:
+                search_query = [q.strip() for q in raw_query.split(",") if q.strip()]
+        except Exception:
+            search_query = [raw_query]
+
         config = {
             "minValue": safe_int(r.get("config_min_value"), 1000),
             "minQtyKg": safe_int(r.get("config_min_qty_kg"), 300),
-            "searchQuery": r.get("config_search_query") or "cocopeat block",
+            "searchQuery": search_query,
             "ntfyTopic": ntfy_topic,
             "userAgent": r.get("user_agent") or ""
         }
@@ -187,7 +196,9 @@ def update_config():
     data = request.json
     if 'minValue' in data: r.set("config_min_value", str(data['minValue']))
     if 'minQtyKg' in data: r.set("config_min_qty_kg", str(data['minQtyKg']))
-    if 'searchQuery' in data: r.set("config_search_query", str(data['searchQuery']))
+    if 'searchQuery' in data: 
+        val = data['searchQuery']
+        r.set("config_search_query", json.dumps(val) if isinstance(val, list) else str(val))
     if 'ntfyTopic' in data: r.set("ntfy_topic", str(data['ntfyTopic']))
     if 'imCookie' in data and data['imCookie']: r.set("im_cookie", str(data['imCookie']))
     if 'userAgent' in data and data['userAgent']: r.set("user_agent", str(data['userAgent']))
