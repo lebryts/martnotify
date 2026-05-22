@@ -68,10 +68,7 @@ async function updateUI() {
         elements.lastCheck.textContent = data.lastStatus;
 
         // Update config values if not focused
-        if (document.activeElement !== elements.searchQuery) {
-            const sq = data.config.searchQuery;
-            elements.searchQuery.value = Array.isArray(sq) ? sq.join(', ') : (sq || '');
-        }
+        if (document.activeElement !== elements.searchQuery) elements.searchQuery.value = data.config.searchQuery || '';
         if (document.activeElement !== elements.minQty) elements.minQty.value = data.config.minQtyKg || '';
         if (document.activeElement !== elements.minValue) elements.minValue.value = data.config.minValue || '';
         if (document.activeElement !== elements.ntfyTopic) elements.ntfyTopic.value = data.config.ntfyTopic || '';
@@ -96,11 +93,8 @@ async function updateUI() {
 
 // Actions
 elements.saveConfig.onclick = async () => {
-    const rawSearch = elements.searchQuery.value;
-    const searchArray = rawSearch.split(',').map(s => s.trim()).filter(s => s);
-
     const config = {
-        searchQuery: searchArray,
+        searchQuery: elements.searchQuery.value,
         minQtyKg: parseInt(elements.minQty.value),
         minValue: parseInt(elements.minValue.value),
         ntfyTopic: elements.ntfyTopic.value,
