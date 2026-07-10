@@ -35,6 +35,7 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+    
 
 app = Flask(__name__)
 CORS(app)
